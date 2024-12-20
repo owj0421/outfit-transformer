@@ -39,7 +39,7 @@ Download the polyvore dataset from [here]()
 ```
 python -m train \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
 --task cp \
 --batch_sz 64 \
@@ -47,15 +47,15 @@ python -m train \
 --n_epochs 16 \
 --lr 1e-4 \
 --accumulation_steps 2 \
---wandb_key fa37a3c4d1befcb0a7b9b4d33799c7bdbff1f81f \
---save_dir ./checkpoints
+--wandb_key $WANDB_KEY \
+--save_dir $SAVE_DIR
 ```
 
 **Train CIR**
 ```
 python -m train \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
 --task cir \
 --batch_sz 64 \
@@ -63,9 +63,9 @@ python -m train \
 --n_epochs 6 \
 --lr 1e-4 \
 --accumulation_steps 4 \
---wandb_key fa37a3c4d1befcb0a7b9b4d33799c7bdbff1f81f \
---save_dir ./checkpoints \
---checkpoint  ./checkpoints/cp-clip-best/epoch_5_acc_0.859_loss_0.035/model.pt
+--wandb_key $WANDB_KEY \
+--save_dir $SAVE_DIR
+--checkpoint $CHECKPOINT
 ```
 
 ## 🔍 Test
@@ -74,26 +74,26 @@ python -m train \
 ```
 python -m test \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
 --task cp \
 --batch_sz 64 \
 --n_workers 4 \
---result_dir ./results \
---checkpoint ./checkpoints/cp-clip-best/epoch_5_acc_0.859_loss_0.035/model.pt
+--result_dir $RESULT_DIR \
+--checkpoint $CHECKPOINT
 ```
 
 **Test FITB**
 ```
 python -m test \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
 --task fitb \
 --batch_sz 32 \
 --n_workers 4 \
---result_dir ./results \
---checkpoint ./checkpoints/cir-clip-visionary-sunset-109/epoch_3_acc_0.660_loss_0.043/model.pt
+--result_dir $RESULT_DIR \
+--checkpoint $CHECKPOINT
 ```
 
 
@@ -103,9 +103,9 @@ python -m test \
 ```
 python -m demo \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --task cp \
---checkpoint  ./checkpoints/cp-clip-best/epoch_5_acc_0.859_loss_0.035/model.pt
+--checkpoint $CHECKPOINT \
 ```
 
 **Demo CIR**
@@ -113,9 +113,9 @@ python -m demo \
 ```
 python -m generate_embeddings \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --batch_sz 16 \
---checkpoint ./checkpoints/cir-clip-visionary-sunset-109/epoch_3_acc_0.660_loss_0.043/model.pt
+--checkpoint $CHECKPOINT \
 ```
 2. Build Faiss Index for Similarity Search
 ```
@@ -127,9 +127,9 @@ python -m build_index \
 ```
 python -m demo \
 --model_type clip \
---polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_dir $POLYVORE_DIR \
 --task cir \
---checkpoint ./checkpoints/cir-clip-visionary-sunset-109/epoch_3_acc_0.660_loss_0.043/model.pt \
+--checkpoint $CHECKPOINT \
 --index_dir ./index
 ```
 
