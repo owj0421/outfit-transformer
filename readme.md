@@ -178,4 +178,4 @@ Follow the steps below to run the demo for each task:
 This is **NON-OFFICIAL** implementation. (The official repo has not been released.)
 
 ## 📜 License
-This library is licensed under the MIT License.
+This Code is licensed under the MIT License.
