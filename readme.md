@@ -1,7 +1,12 @@
-# <div align="center"> Outfit-Transformer </div>
+# <div align="center"> Outfit Transformer: Outfit Representations for Fashion Recommendation </div>
 
 ## 🤗 Introduction
-Implementation of paper - [Outfit Transformer: Outfit Representations for Fashion Recommendation](https://arxiv.org/abs/2204.04812)<br>
+
+This repository contains the implementation of the Outfit Transformer, inspired by the original paper:
+
+> Rohan Sarkar et al. [Outfit Transformer: Outfit Representations for Fashion Recommendation](https://arxiv.org/abs/2204.04812). CVPR 2023.
+
+Our implementation not only faithfully reproduces the method presented in the paper but also introduces several enhancements to improve performance. These improvements elevate the model to a state-of-the-art (SoTA) level, achieving superior results in fashion recommendation tasks.
 
 <div align="center"> <img src = https://github.com/owj0421/outfit-transformer/assets/98876272/fc39d1c7-b076-495d-8213-3b98ef038b64 width = 512> </div>
 
@@ -21,17 +26,22 @@ Implementation of paper - [Outfit Transformer: Outfit Representations for Fashio
 </div>
 
 ## 📥 Download
+The model is trained on the Polyvore dataset. Since the official download link is no longer available, you can download the dataset from [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
-Download Checkpoints & Dataset from [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link)
+Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
-## 🛠️ Install Dependencies
+## 🛠️ Settings
+
+Follow the instructions below to install the required dependencies:
 ```
 pip install -r requirements.txt
 ```
 
-## 📚 Train
+## 🚀 Training
+Follow the steps below to train the model:
 
-**Compatibility Prediction**
+**Step 1: Train the model for Compatibility Prediction**
+Start by training the model for the Compatibility Prediction (CP) task:
 <details>
 <summary>Click to expand</summary>
 
@@ -47,13 +57,14 @@ python -m train \
 --lr 1e-4 \
 --accumulation_steps 2 \
 --wandb_key $WANDB_KEY \
---save_dir $SAVE_DIR
+--save_dir $CHECKPOINT_DIR
 ```
 </details>
 
 <br>
 
-**Complementary Item Retrieval**
+**Step 2: Train for Complementary Item Retrieval using the best CP checkpoint**
+After completing Step 1, use the checkpoint with the best accuracy from the Compatibility Prediction task to train the model for the Complementary Item Retrieval (CIR) task:
 <details>
 <summary>Click to expand</summary>
 
@@ -69,12 +80,14 @@ python -m train \
 --lr 1e-4 \
 --accumulation_steps 4 \
 --wandb_key $WANDB_KEY \
---save_dir $SAVE_DIR
+--save_dir $CHECKPOINT_DIR
 --checkpoint $CHECKPOINT
 ```
 </details>
 
-## 🧪 Test
+## 🧪 Evaluation
+
+Follow the steps below to evaluate model for each task:
 
 **Compatibility Prediction**
 <details>
@@ -113,6 +126,8 @@ python -m test \
 </details>
 
 ## 🎬 Demo
+
+Follow the steps below to run the demo for each task:
 
 **Compatibility Prediction**
 <details>
@@ -161,3 +176,6 @@ python -m test \
 
 ## 🔔 Note
 This is **NON-OFFICIAL** implementation. (The official repo has not been released.)
+
+## 📜 License
+This library is licensed under the MIT License.
