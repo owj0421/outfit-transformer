@@ -3,12 +3,9 @@
 ## 🤗 Introduction
 Implementation of paper - [Outfit Transformer: Outfit Representations for Fashion Recommendation](https://arxiv.org/abs/2204.04812)<br>
 
-⚠️ The original paper outlines the specifics of the target item for Compatitible Item Retrieval (CIR) and Fill-in-the-Blank (FITB). Nonetheless, for the sake of impartial evaluation alongside other models, this information was intentionally excluded. (Should a dataset emerge that necessitates the prediction of a matching item when presented with a description unrelated to the target item itself, the model will be retrained accordingly.)
-
 <div align="center"> <img src = https://github.com/owj0421/outfit-transformer/assets/98876272/fc39d1c7-b076-495d-8213-3b98ef038b64 width = 512> </div>
 
 ## 🎯 Performance
-The figures below are derived using the Polyvore test dataset.
 
 <div align="center">
 
@@ -18,39 +15,123 @@ The figures below are derived using the Polyvore test dataset.
 |SCE-Net|0.91|59.07|5.10|
 |CSA-Net|0.91|63.73|8.27|
 |OutfitTransformer(Paper)|0.93|67.10|9.58|
-|**Implemented <br> (w/o target desc.)**|**0.91**|**64.10**|Not Trained|
+|**Implemented <br> (Original)**|**0.912**|**?**|Not Trained|
+|**Implemented <br> (w/ CLIP Backbone)**|**0.941**|**?**|Not Trained|
+
 </div>
 
 
 
-## ⚙ Install Dependencies
-This code is tested with python 3.9.16, torch 1.12.1
+## ⚙ Settings
+**Install Dependencies**
 ```
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 ```
 
+**Download Checkpoint**
+Download the checkpoint from [here]()
+
+**Download Dataset**
+Download the polyvore dataset from [here]()
 ## 🧱 Train
-### Data Preparation
-Download the polyvore dataset from [here](https://github.com/xthan/polyvore-dataset)
 
-### Pretraining on CP(Compatibiliby Prediction) task
+**Train CP**
 ```
-python train.py --task cp --train_batch 64 --valid_batch 96 --n_epochs 5 --learning_rate 1e-5 --scheduler_step_size 1000 --work_dir $WORK_DIR --data_dir $DATA_DIR --wandb_api_key $WANDB_API_KEY
+python -m train \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_type nondisjoint \
+--task cp \
+--batch_sz 64 \
+--n_workers 4 \
+--n_epochs 16 \
+--lr 1e-4 \
+--accumulation_steps 2 \
+--wandb_key fa37a3c4d1befcb0a7b9b4d33799c7bdbff1f81f \
+--save_dir ./checkpoints
 ```
 
-### Finetuning on CIR(Complementary Item Retrival) task
+**Train CIR**
 ```
-python train.py --task cir --train_batch 64 --valid_batch 96 --n_epochs 5 --learning_rate 1e-5 --scheduler_step_size 1000 --work_dir $WORK_DIR --data_dir $DATA_DIR --wandb_api_key $WANDB_API_KEY --checkpoint $CHECKPOINT
+python -m train \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_type nondisjoint \
+--task cir \
+--batch_sz 64 \
+--n_workers 4 \
+--n_epochs 6 \
+--lr 1e-4 \
+--accumulation_steps 4 \
+--wandb_key fa37a3c4d1befcb0a7b9b4d33799c7bdbff1f81f \
+--save_dir ./checkpoints \
+--checkpoint  ./checkpoints/cp-clip-best/epoch_5_acc_0.859_loss_0.035/model.pt
 ```
 
 ## 🔍 Test
+
+**Test CP**
 ```
-python test.py --task $TASK --polyvore_split nondisjoint --test_batch 96 --data_dir $DATA_DIR --checkpoint $CHECKPOINT
+python -m test \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_type nondisjoint \
+--task cp \
+--batch_sz 64 \
+--n_workers 4 \
+--result_dir ./results \
+--checkpoint ./checkpoints/cp-clip-best/epoch_5_acc_0.859_loss_0.035/model.pt
 ```
 
-## 🧶 Checkpoints
-Download the checkpoint from [here](https://drive.google.com/drive/folders/1etD-c-BOgvDHTHkmQoNh3K31P_MWt2eg?usp=share_link)
+**Test FITB**
+```
+python -m test \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--polyvore_type nondisjoint \
+--task fitb \
+--batch_sz 32 \
+--n_workers 4 \
+--result_dir ./results \
+--checkpoint ./checkpoints/cir-clip-visionary-sunset-109/epoch_3_acc_0.660_loss_0.043/model.pt
+```
+
+
+## Demo
+**Demo CP**
+1. Run demo
+```
+python -m demo \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--task cp \
+--checkpoint  ./checkpoints/cp-clip-best/epoch_5_acc_0.859_loss_0.035/model.pt
+```
+
+**Demo CIR**
+1. Generate Item Embeddings
+```
+python -m generate_embeddings \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--batch_sz 16 \
+--checkpoint ./checkpoints/cir-clip-visionary-sunset-109/epoch_3_acc_0.660_loss_0.043/model.pt
+```
+2. Build Faiss Index for Similarity Search
+```
+python -m build_index \
+--embeddings_dir ./index \
+--save_dir ./index
+```
+3. Run demo
+```
+python -m demo \
+--model_type clip \
+--polyvore_dir /home/owj0421/datasets/polyvore \
+--task cir \
+--checkpoint ./checkpoints/cir-clip-visionary-sunset-109/epoch_3_acc_0.660_loss_0.043/model.pt \
+--index_dir ./index
+```
 
 ## 🔔 Note
-- A paper review of implementation can be found at [here](). (Only Available in Korean)
-- This is **NON-OFFICIAL** implementation. (The official repo has not been released.)
+This is **NON-OFFICIAL** implementation. (The official repo has not been released.)

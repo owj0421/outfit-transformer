@@ -1,83 +1,56 @@
-# -*- coding:utf-8 -*-
-"""
-Author:
-    Wonjun Oh, owj0421@naver.com
-"""
 import os
-import numpy as np
 import random
-import json
+import numpy as np
 import torch
-import torch.nn.functional as F
-from torch import Tensor
-from dataclasses import dataclass
-import cv2
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, Literal
-from tqdm import tqdm
+from torch.utils.data import Dataset, DataLoader
+from sklearn.metrics import roc_auc_score
+
+def seed_everything(seed: int):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
 
-def stack_tensors(mask, tensor):
-    B, S = mask.shape
-    mask = mask.reshape(-1)
-    s = list(tensor.shape)
-    tensor = tensor.reshape([s[0] * s[1]] + s[2:])
-    tensor = tensor[~mask]
-    return tensor
-
-
-def unstack_tensors(mask, tensor):
-    B, S = mask.shape
-    mask = mask.reshape(-1)
-    new_shape = [B * S] + list(tensor.shape)[1:]
-    device = tensor.device if tensor.device.type == 'cuda' else torch.device('cpu')
-    new_tensor = torch.zeros(new_shape, dtype=tensor.dtype, device=device)
-    new_tensor[~mask] = tensor
-    new_tensor = new_tensor.reshape([B, S] + list(tensor.shape)[1:])
-    return new_tensor
-
-
-def stack_dict(batch):
-    mask = batch.get('mask')  # 'mask' 키가 없을 경우 None을 반환
-    stacked_batch = {key: stack_tensors(mask, value) if (key != 'mask' and value != None) else value for key, value in batch.items()}
-    return stacked_batch
-
-
-def unstack_dict(batch):
-    mask = batch.get('mask')  # 'mask' 키가 없을 경우 None을 반환
-    unstacked_batch = {key: unstack_tensors(mask, value) if (key != 'mask' and value != None) else value for key, value in batch.items()}
-    return unstacked_batch
-
-
-def unstack_output(output):
-    for i in output.__dict__.keys():
-        if i == 'mask':
-            continue
-        attr = getattr(output, i)
-        if isinstance(attr, list):
-            setattr(output, i, [unstack_tensors(output.mask, i) for i in attr])
-        elif isinstance(attr, Tensor):
-            setattr(output, i, unstack_tensors(output.mask, attr))
-    return output
-
-
-def save_model(model, save_dir, model_name, device):
+def score_fitb(
+    query_embed: torch.Tensor, # (batch_size, embedding_dim)
+    candidate_embeds: torch.Tensor, # (batch_size, num_candidates, embedding_dim)
+    label: torch.Tensor, # (batch_size)
+):
+    batch_sz, num_candidates, d_embed = candidate_embeds.size()
     
-    def _create_folder(dir):
-        try:
-            if not os.path.exists(dir):
-                os.makedirs(dir)
-        except OSError:
-            print('[Error] Creating directory.' + dir)
+    query_cand_dist = torch.nn.functional.pairwise_distance(
+        query_embed.unsqueeze(1).repeat(1, num_candidates, 1).reshape(-1, d_embed),
+        candidate_embeds.reshape(-1, d_embed)
+    )
+    dist = query_cand_dist.view(batch_sz, num_candidates)
+    pred = dist.min(dim=1).indices
+    acc = (pred == label).sum().item() / len(label)
+    
+    return pred, {"acc": acc}
 
-    _create_folder(save_dir)
 
-    model.cpu()
-    path = os.path.join(save_dir, f'{model_name}.pth')
-    checkpoint = {
-        'state_dict': model.state_dict()
-        }
-    torch.save(checkpoint, path)
-    print(f'[COMPLETE] Save at {path}')
-    model.to(device)
+def score_cp(
+    pred: torch.Tensor, # (batch_size, num_candidates)
+    label: torch.Tensor, # (batch_size)
+    compute_auc: bool = False
+):
+    acc = (
+        (pred > 0.5).eq(label).sum().item() / len(label)
+    )
+    if not compute_auc:
+        return {"acc": acc}
+    
+    try: 
+        auc = roc_auc_score(
+            y_true=pred.numpy(),
+            y_score=label.numpy()
+        )
+    except ValueError:
+        auc = 0.0
+        
+    return {"acc": acc, "auc": auc}

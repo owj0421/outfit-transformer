@@ -10,7 +10,7 @@ from tqdm import tqdm
 from copy import deepcopy
 from itertools import chain
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union, Literal
 
 import numpy as np
 from numpy import ndarray
@@ -21,167 +21,261 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 
-from src.utils.utils import *
-from src.datasets.processor import *
 import pickle
 
 from PIL import Image
+import torchvision.transforms as transforms
+import json
+import random
 
+from ..utils.elements import Item, Outfit, Query
+        
+        
+class PolyvoreItems():
+    
+    def __init__(
+        self,
+        dataset_dir,
+    ):
+        self.items = []
+        self.item_id_to_idx = {}
+        self.item_id_by_category = {}
+        
+        with open(os.path.join(dataset_dir, 'item', 'metadata.json'), 'r') as f:
+            metadatas = json.load(f)
+            
+        for item_id, item_ in metadatas.items():
+            self.item_id_to_idx[item_id] = len(self.items)
+            self.items.append(
+                {
+                    'id': item_id,
+                    'category': item_['semantic_category'],
+                    'image_path': os.path.join(dataset_dir, 'images', f"{item_id}.jpg"),
+                    'description': item_['description'] if item_['description'] else item_['url_name'],
+                }
+            )
+            if item_['semantic_category'] not in self.item_id_by_category:
+                self.item_id_by_category[item_['semantic_category']] = []
+            self.item_id_by_category[item_['semantic_category']].append(item_id)
+        
+    def __len__(self):
+        return len(self.items)
+    
+    def __call__(self, item_id):
+        idx = self.item_id_to_idx[item_id]
+        item = self.items[idx]
+        item = Item(
+            id=item['id'],
+            category=item['category'],
+            image=Image.open(item['image_path']),
+            description=item['description']
+        )
+        
+        return item
+    
+    def sample_by_category(self, n_samples, category: str=None):
+        if category is None:
+            item_ids = list(self.item_id_to_idx.keys())
+        else:
+            item_ids = self.item_id_by_category[category]
+        
+        return random.sample(item_ids, n_samples)
+    
+    def get_category(self, item_id):
+        idx = self.item_id_to_idx[item_id]
+        
+        return self.items[idx]['category']
+        
 
-@dataclass
-class DatasetArguments:
-    polyvore_split: str = 'nondisjoint'
-    task_type: str = 'cp'
-    dataset_type: str = 'train'
-
-
-class PolyvoreDataset(Dataset):
+class PolyvoreCompatibilityDataset(Dataset):
 
     def __init__(
-            self,
-            data_dir: str,
-            args: DatasetArguments,
-            input_processor: FashionInputProcessor,
-            ):
-        # Arguments
-        self.args = args
-        self.is_train = (args.dataset_type == 'train')
-        # Meta Data preprocessing
-        self.item_ids, self.item_id2idx, self.item_id2category, self.category2item_ids, \
-            self.categories, self.outfit_id2item_id, self.item_id2desc = load_data(data_dir, args)
-        
-        self.img_dir = os.path.join(data_dir, 'images')
-        self.input_processor = input_processor
-            
-        # Input Type
-        if args.task_type == 'cp':
-            self.data = load_cp_inputs(data_dir, args, self.outfit_id2item_id)
-        elif args.task_type == 'fitb':
-            self.data = load_fitb_inputs(data_dir, args, self.outfit_id2item_id)
-        elif args.task_type == 'cir':
-            self.data = load_triplet_inputs(data_dir, args, self.outfit_id2item_id)
-        else:
-            raise ValueError('task_type must be one of "cp", "fitb", and "cir".')
-
-    def _load_img(self, item_id):
-        path = os.path.join(self.img_dir, f"{item_id}.jpg")
-        img = cv2.imread(path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        return img
-    
-    def _load_txt(self, item_id):
-        desc = self.item_id2desc[item_id] if item_id in self.item_id2desc else self.item_id2category[item_id]
-
-        return desc
-    
-    def _get_inputs(self, item_ids: List[int], pad: bool=False) -> Dict[str, Tensor]:
-        category = [self.item_id2category[item_id] for item_id in item_ids]
-        images = [self._load_img(item_id) for item_id in item_ids]
-        texts = [self._load_txt(item_id) for item_id in item_ids]
-        
-        return self.input_processor(category, images, texts=texts, do_pad=pad)
-
-    def __getitem__(self, idx):
-        if self.args.task_type == 'cp':
-            targets, outfit_ids = self.data[idx]
-            inputs = self._get_inputs(outfit_ids, pad=True)
-
-            return {'targets': targets, 'inputs': inputs}
-        
-        elif self.args.task_type =='fitb':
-            question_ids, candidate_ids = self.data[idx]
-            questions = self._get_inputs(question_ids, pad=True)
-            candidates = self._get_inputs(candidate_ids)
-
-            return  {'questions': questions, 'candidates': candidates} # ans is always 0 index
-
-        elif self.args.task_type =='cir':
-            item_ids = self.data[idx]
-            np.random.shuffle(item_ids)
-            
-            anchor_item_ids = item_ids[1:]
-            positive_item_ids = [item_ids[0]]
-            
-            anchor = self._get_inputs(anchor_item_ids, pad=True)
-            positive = self._get_inputs(positive_item_ids)
-
-            return {'anchor': anchor, 'positive': positive}
+        self,
+        dataset_dir: str,
+        polyvore_type: Literal[
+            'nondisjoint',
+            'disjoint',
+        ] = 'nondisjoint',
+        split: Literal[
+            'train',
+            'valid',
+            'test',
+        ] = 'train',
+    ):
+        path = os.path.join(
+            dataset_dir, polyvore_type, 'compatibility', f"{split}.json"
+        )
+        with open(path, 'r') as f:
+            self.data = json.load(f)
+        self.polyvore_type = polyvore_type
+        self.split = split
         
     def __len__(self):
         return len(self.data)
     
+    def __getitem__(self, idx):
+        outfit = self.data[idx]
+        
+        return outfit
+    
+    def collate_fn(self, batch):
+        label = [float(item['label']) for item in batch]
+        question = [item['question'] for item in batch]
 
-def load_fitb_inputs(data_dir, args, outfit_id2item_id):
-    fitb_path = os.path.join(data_dir, args.polyvore_split, f'fill_in_blank_{args.dataset_type}.json')
-    with open(fitb_path, 'r') as f:
-        fitb_data = json.load(f)
-        fitb_inputs = []
-        for item in fitb_data:
-            question_ids = list(map(lambda x: outfit_id2item_id[x], item['question']))
-            candidate_ids = list(map(lambda x: outfit_id2item_id[x], item['answers']))
-            fitb_inputs.append((question_ids, candidate_ids))
-    return fitb_inputs
+        return {
+            'label': label,
+            'question': question
+        }
+        
+        
+class PolyvoreFillInTheBlankDataset(Dataset):
 
+    def __init__(
+        self,
+        polyvore_items: PolyvoreItems,
+        dataset_dir: str,
+        polyvore_type: Literal[
+            'nondisjoint',
+            'disjoint',
+        ] = 'nondisjoint',
+        split: Literal[
+            'train',
+            'valid',
+            'test',
+        ] = 'train',
+    ):
+        self.polyvore_items = polyvore_items
+        path = os.path.join(
+            dataset_dir, polyvore_type, 'fill_in_the_blank', f"{split}.json"
+        )
+        with open(path, 'r') as f:
+            self.data = json.load(f)
+        self.polyvore_type = polyvore_type
+        self.split = split
+        
+        
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+        outfit = self.data[idx]
+        outfit['candidates'] = outfit['answers']
+        outfit['category'] = self.polyvore_items.get_category(outfit['candidates'][int(outfit['label'])])
+        
+        return outfit
+    
+    def collate_fn(self, batch):
+        label = [item['label'] for item in batch]
+        question = [item['question'] for item in batch]
+        candidates = [item['candidates'] for item in batch]
+        blank_positions = [item['blank_position'] for item in batch]
+        category = [item['category'] for item in batch]
 
-def load_cp_inputs(data_dir, args, outfit_id2item_id):
-    cp_path = os.path.join(data_dir, args.polyvore_split, f'compatibility_{args.dataset_type}.txt')
-    cp_inputs = []
-    with open(cp_path, 'r') as f:
-        cp_data = f.readlines()
-        for d in cp_data:
-            target, *item_ids = d.split()
-            cp_inputs.append((torch.FloatTensor([int(target)]), list(map(lambda x: outfit_id2item_id[x], item_ids))))
-    return cp_inputs
-
-
-def load_triplet_inputs(data_dir, args, outfit_id2item_id):
-    outfit_data_path = os.path.join(data_dir, args.polyvore_split, f'{args.dataset_type}.json')
-    outfit_data = json.load(open(outfit_data_path))
-    triplet_inputs = [[outfit['items'][i]['item_id'] 
-                       for i in range(len(outfit['items']))] 
-                       for outfit in outfit_data]
-    triplet_inputs = list(filter(lambda x: len(x) > 1, triplet_inputs))
-    return triplet_inputs
-
-def load_data(data_dir, args):
-    # Paths
-    # data_dir = os.path.join(data_dir, args.polyvore_split)
-    outfit_data_path = os.path.join(data_dir, args.polyvore_split, f'{args.dataset_type}.json')
-    meta_data_path = os.path.join(data_dir, 'polyvore_item_metadata.json')
-    outfit_data = json.load(open(outfit_data_path))
-    meta_data = json.load(open(meta_data_path))
-    # Load
-    item_ids = set()
-    categories = set()
-    item_id2category = {}
-    item_id2desc = {}
-    category2item_ids = {}
-    outfit_id2item_id = {}
-    for outfit in outfit_data:
-        outfit_id = outfit['set_id']
-        for item in outfit['items']:
-            # Item of cloth
-            item_id = item['item_id']
-            item_ids.add(item_id)
-            # Category of cloth
-            category = '<' + meta_data[item_id]['semantic_category'] + '>'
-            categories.add(category)
-            item_id2category[item_id] = category
-            if category not in category2item_ids:
-                category2item_ids[category] = set()
-            category2item_ids[category].add(item_id)
-            # Description of cloth
-            desc = meta_data[item_id]['title']
-            if not desc:
-                desc = meta_data[item_id]['url_name']
-            item_id2desc[item_id] = desc.replace('\n','').strip().lower()
-            # Replace the item code with the outfit number with the image code
-            outfit_id2item_id[f"{outfit['set_id']}_{item['index']}"] = item_id
+        return {
+            'label': label,
+            'question': question,
+            'candidates': candidates,
+            'blank_position': blank_positions,
+            'category': category
+        }
+        
+        
+class PolyvoreTripletDataset(Dataset):
+    
+        def __init__(
+            self,
+            polyvore_items: PolyvoreItems,
+            dataset_dir: str,
+            polyvore_type: Literal[
+                'nondisjoint',
+                'disjoint',
+            ] = 'nondisjoint',
+            split: Literal[
+                'train',
+                'valid',
+                'test',
+            ] = 'train',
+            sampling_strategy: Literal[
+                'in-batch', 'all', 'same_category'
+            ] = 'same_category',
+            n_samples: Optional[Dict[Literal['all', 'hard'], int]] = {'hard': 2, 'all': 8},
+        ):
+            self.polyvore_items = polyvore_items
+            path = os.path.join(
+                dataset_dir, polyvore_type, f"{split}.json"
+            )
+            with open(path, 'r') as f:
+                self.data = json.load(f)
+            self.polyvore_type = polyvore_type
+            self.split = split
             
-    item_ids = list(item_ids)
-    item_id2idx = {id : idx for idx, id in enumerate(item_ids)}
-    categories = list(categories)
-
-    return item_ids, item_id2idx, \
-        item_id2category, category2item_ids, categories, \
-            outfit_id2item_id, item_id2desc
+            self.set_id = list(self.data.keys())
+            self.sampling_strategy = sampling_strategy
+            self.n_samples = n_samples
+            
+        def __len__(self):
+            return len(self.set_id)
+        
+        def __getitem__(self, idx):
+            set_id = self.set_id[idx]
+            item_ids = self.data[set_id]['item_ids']
+            
+            random.shuffle(item_ids)
+            
+            anchor = item_ids[:-1]
+            positive = [item_ids[-1]]
+            
+            category = self.polyvore_items.get_category(positive[0])
+            
+            all_negative = self.polyvore_items.sample_by_category(n_samples=self.n_samples['all'])
+            hard_negative = self.polyvore_items.sample_by_category(n_samples=self.n_samples['hard'], category=category)
+            
+            return {
+                "anchor": anchor,
+                "positive": positive,
+                "all_negative": all_negative,
+                "hard_negative": hard_negative,
+                "category": category
+            }
+        
+        def collate_fn(self, batch):
+            anchor = [item['anchor'] for item in batch]
+            positive = [item['positive'] for item in batch]
+            all_negative = [item['all_negative'] for item in batch]
+            hard_negative = [item['hard_negative'] for item in batch]
+            category = [item['category'] for item in batch]
+            
+            return {
+                'anchor': anchor,
+                'positive': positive,
+                'all_negative': all_negative,
+                'hard_negative': hard_negative,
+                'category': category
+            }
+            
+            
+if __name__ == '__main__':
+    polyvore_items = PolyvoreItems(
+        dataset_dir='/home/owj0421/datasets/polyvore'
+    )
+    print(polyvore_items.items[0])
+    
+    print(polyvore_items.item_id_by_category.keys())
+    
+    # polyvore_triplet_dataset = PolyvoreTripletDataset(
+    #     polyvore_items=polyvore_items,
+    #     dataset_dir='/home/owj0421/datasets/polyvore',
+    #     polyvore_type='nondisjoint',
+    #     split='train',
+    #     sampling_strategy='same_category',
+    #     n_samples=4
+    # )
+    # polyvore_fitb_dataset = PolyvoreFillInTheBlankDataset(
+    #     polyvore_items=polyvore_items,
+    #     dataset_dir='/home/owj0421/datasets/polyvore',
+    #     polyvore_type='nondisjoint',
+    #     split='train'
+    # )
+    
+    # print(polyvore_triplet_dataset[0])
+    # print(polyvore_fitb_dataset[0])

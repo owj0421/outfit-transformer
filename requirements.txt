@@ -1,5 +1,10 @@
-transformers
-albumentations
-opencv-python
+pytorch==2.5.0
+torchvision==0.20.0
+torchaudio==2.5.0
+pillow==11.0.0
+transformers==4.46.1
 wandb
 tqdm
+scikit-learn
+gradio
+faiss-gpu
