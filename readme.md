@@ -10,32 +10,31 @@ Implementation of paper - [Outfit Transformer: Outfit Representations for Fashio
 <div align="center">
 
 |Model|CP(AUC)|FITB(Accuracy)|CIR(Recall@10)|
-|:-|-:|-:|-:|
+|:-:|:-:|:-:|:-:|
 |Type-Aware|0.86|57.83|3.50|
 |SCE-Net|0.91|59.07|5.10|
 |CSA-Net|0.91|63.73|8.27|
-|OutfitTransformer(Paper)|0.93|67.10|9.58|
-|**Implemented <br> (Original)**|**0.912**|**?**|Not Trained|
-|**Implemented <br> (w/ CLIP Backbone)**|**0.941**|**?**|Not Trained|
+|OutfitTransformer(Paper)|<u>0.93</u>|**67.10**|9.58|
+|**Implemented <br> (Original)**|0.92|?|No Dataset|
+|**Implemented <br> (w/ CLIP Backbone)**|**0.94 <br> (SOTA)**|<u>65.92</u>|No Dataset|
 
 </div>
 
+## 📥 Download
 
+Download Checkpoints & Dataset from [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link)
 
-## ⚙ Settings
-**Install Dependencies**
+## 🛠️ Install Dependencies
 ```
 pip install -r requirements.txt
 ```
 
-**Download Checkpoint**
-Download the checkpoint from [here]()
+## 📚 Train
 
-**Download Dataset**
-Download the polyvore dataset from [here]()
-## 🧱 Train
+**Compatibility Prediction**
+<details>
+<summary>Click to expand</summary>
 
-**Train CP**
 ```
 python -m train \
 --model_type clip \
@@ -50,8 +49,14 @@ python -m train \
 --wandb_key $WANDB_KEY \
 --save_dir $SAVE_DIR
 ```
+</details>
 
-**Train CIR**
+<br>
+
+**Complementary Item Retrieval**
+<details>
+<summary>Click to expand</summary>
+
 ```
 python -m train \
 --model_type clip \
@@ -67,10 +72,14 @@ python -m train \
 --save_dir $SAVE_DIR
 --checkpoint $CHECKPOINT
 ```
+</details>
 
-## 🔍 Test
+## 🧪 Test
 
-**Test CP**
+**Compatibility Prediction**
+<details>
+<summary>Click to expand</summary>
+
 ```
 python -m test \
 --model_type clip \
@@ -82,8 +91,14 @@ python -m test \
 --result_dir $RESULT_DIR \
 --checkpoint $CHECKPOINT
 ```
+</details>
 
-**Test FITB**
+<br>
+
+**Fill-in-the-blank**
+<details>
+<summary>Click to expand</summary>
+
 ```
 python -m test \
 --model_type clip \
@@ -95,43 +110,54 @@ python -m test \
 --result_dir $RESULT_DIR \
 --checkpoint $CHECKPOINT
 ```
+</details>
 
+## 🎬 Demo
 
-## Demo
-**Demo CP**
+**Compatibility Prediction**
+<details>
+<summary>Click to expand</summary>
+
 1. Run demo
-```
-python -m demo \
---model_type clip \
---polyvore_dir $POLYVORE_DIR \
---task cp \
---checkpoint $CHECKPOINT \
-```
+    ```
+    python -m demo \
+    --model_type clip \
+    --polyvore_dir $POLYVORE_DIR \
+    --task cp \
+    --checkpoint $CHECKPOINT \
+    ```
+</details>
 
-**Demo CIR**
+<br>
+
+**Complementary Item Retrieval**
+<details>
+<summary>Click to expand</summary>
+
 1. Generate Item Embeddings
-```
-python -m generate_embeddings \
---model_type clip \
---polyvore_dir $POLYVORE_DIR \
---batch_sz 16 \
---checkpoint $CHECKPOINT \
-```
-2. Build Faiss Index for Similarity Search
-```
-python -m build_index \
---embeddings_dir ./index \
---save_dir ./index
-```
-3. Run demo
-```
-python -m demo \
---model_type clip \
---polyvore_dir $POLYVORE_DIR \
---task cir \
---checkpoint $CHECKPOINT \
---index_dir ./index
-```
+    ```
+    python -m generate_embeddings \
+    --model_type clip \
+    --polyvore_dir $POLYVORE_DIR \
+    --batch_sz 16 \
+    --checkpoint $CHECKPOINT \
+    ```
+2. Build Faiss Index.
+    ```
+    python -m build_index \
+    --embeddings_dir ./index \
+    --save_dir ./index
+    ```
+3. Run Demo
+    ```
+    python -m demo \
+    --model_type clip \
+    --polyvore_dir $POLYVORE_DIR \
+    --task cir \
+    --checkpoint $CHECKPOINT \
+    --index_dir ./index
+    ```
+</details>
 
 ## 🔔 Note
 This is **NON-OFFICIAL** implementation. (The official repo has not been released.)
