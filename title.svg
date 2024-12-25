@@ -22,12 +22,13 @@
           box-sizing: border-box;
           padding: 24px;
           display: flex;
-          justify-content: left;
+          flex-direction: column;   /* 요소들을 수직으로 배치 */
+          justify-content: center;
           align-items: center;
           border-radius: 8px;
         }
         .container.title {
-          justify-content: left; /* 가로 중앙 정렬 */
+          justify-content: center; /* 가로 중앙 정렬 */
           align-items: stretch; /* 위 아래로 정렬 */
         }
 
@@ -36,7 +37,7 @@
           animation: hi 1.5s linear -0.5s infinite;
           display: inline-block;
           transform-origin: 70% 70%;
-          padding: 0 8px 0 4px ;
+          padding: 0px 12px 12px 12px ;
         }
 
         @media (prefers-reduced-motion) {
@@ -52,26 +53,25 @@
         .title.main {
             font-size: 24px;
             font-weight: 600;
-            padding: 2px 0 0 0;
+            padding: 0 0 4px 0;
         }
         .title.sub {
             font-size: 10px;
             font-weight: 100;
-            padding: 0 0 0 1px;
+            padding: 0 0 0 0;
         }
       </style>
 
       <div class="container">
+        
         <div class="hi">
-          🧷
+        🧷
         </div>
-        <div class="container.title">
-          <div class="title main">
-            Outfit Transformer
-          </div>
-          <div class="title sub">
-            : Outfit Representations for Fashion Recommendation
-          </div>
+        <div class="title main">
+        Outfit Transformer
+        </div>
+        <div class="title sub">
+        Outfit Representations for Fashion Recommendation
         </div>
 
         
