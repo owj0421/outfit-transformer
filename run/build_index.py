@@ -12,8 +12,33 @@ import pickle
 
 from src.index.indexer import Indexer
 from src.utils import slurm
+from argparse import ArgumentParser
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--projection_size", type=int, default=128,
+        help=""
+    )
+    parser.add_argument(
+        "--n_subquantizers", type=int, default=0,
+        help="Number of subquantizer used for embedding quantization, if 0 flat index is used"
+    )
+    parser.add_argument(
+        "--n_bits", type=int, default=8, 
+        help="Number of bits per subquantizer"
+    )
+    parser.add_argument(
+        "--embeddings_dir", type=str, default="./db",
+        help="dir path to embeddings"
+    )
+    parser.add_argument(
+        "--save_dir", type=str, default="./db",
+        help="dir path to save index"
+    )
+    return parser.parse_args()
 
 
 def main(args):
@@ -69,27 +94,6 @@ def main(args):
     
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--projection_size", type=int, default=128,
-        help=""
-    )
-    parser.add_argument(
-        "--n_subquantizers", type=int, default=0,
-        help="Number of subquantizer used for embedding quantization, if 0 flat index is used"
-    )
-    parser.add_argument(
-        "--n_bits", type=int, default=8, 
-        help="Number of bits per subquantizer"
-    )
-    parser.add_argument(
-        "--embeddings_dir", type=str,
-        help="dir path to embeddings"
-    )
-    parser.add_argument(
-        "--save_dir", type=str,
-        help="dir path to save index"
-    )
-    args = parser.parse_args()
+    args = parse_args()
     slurm.init_distributed_mode(args)
     main(args)

@@ -46,7 +46,7 @@ Start by training the model for the Compatibility Prediction (CP) task:
 <summary>Click to expand</summary>
 
 ```
-python -m train \
+python -m run.train \
 --model_type clip \
 --polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
@@ -69,7 +69,7 @@ After completing Step 1, use the checkpoint with the best accuracy from the Comp
 <summary>Click to expand</summary>
 
 ```
-python -m train \
+python -m run.train \
 --model_type clip \
 --polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
@@ -94,7 +94,7 @@ Follow the steps below to evaluate model for each task:
 <summary>Click to expand</summary>
 
 ```
-python -m test \
+python -m run.test \
 --model_type clip \
 --polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
@@ -113,7 +113,7 @@ python -m test \
 <summary>Click to expand</summary>
 
 ```
-python -m test \
+python -m run.test \
 --model_type clip \
 --polyvore_dir $POLYVORE_DIR \
 --polyvore_type nondisjoint \
@@ -135,7 +135,7 @@ Follow the steps below to run the demo for each task:
 
 1. Run demo
     ```
-    python -m demo \
+    python -m run.demo \
     --model_type clip \
     --polyvore_dir $POLYVORE_DIR \
     --task cp \
@@ -151,7 +151,7 @@ Follow the steps below to run the demo for each task:
 
 1. Generate Item Embeddings
     ```
-    python -m generate_embeddings \
+    python -m run.generate_embeddings \
     --model_type clip \
     --polyvore_dir $POLYVORE_DIR \
     --batch_sz 16 \
@@ -159,18 +159,15 @@ Follow the steps below to run the demo for each task:
     ```
 2. Build Faiss Index.
     ```
-    python -m build_index \
-    --embeddings_dir ./index \
-    --save_dir ./index
+    python -m run.build_index \
     ```
 3. Run Demo
     ```
-    python -m demo \
+    python -m run.demo \
     --model_type clip \
     --polyvore_dir $POLYVORE_DIR \
     --task cir \
     --checkpoint $CHECKPOINT \
-    --index_dir ./index
     ```
 </details>
 

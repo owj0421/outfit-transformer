@@ -73,6 +73,29 @@ class PolyvoreItems():
         
         return item
     
+    def list_item(
+        self, 
+        page: int = 1,
+        item_per_page: int = 10,
+        category: Optional[str] = None
+    ) -> List[Item]:
+        
+        if category is None:
+            items = self.item_id_to_idx.keys()[(page - 1) * item_per_page: page * item_per_page]
+        else:
+            items = self.item_id_by_category[category][(page - 1) * item_per_page: page * item_per_page]
+        
+        return [
+            self(item_id) for item_id in items
+        ]
+        
+    def num_page_list_item(self, item_per_page: int = 10, category: Optional[str] = None) -> int:
+        if category is None:
+            return math.ceil(len(self.items) / item_per_page)
+        else:
+            return math.ceil(len(self.item_id_by_category[category]) / item_per_page)
+        
+    
     def sample_by_category(self, n_samples, category: str=None):
         if category is None:
             item_ids = list(self.item_id_to_idx.keys())
@@ -261,6 +284,8 @@ if __name__ == '__main__':
     print(polyvore_items.items[0])
     
     print(polyvore_items.item_id_by_category.keys())
+    
+    print(polyvore_items.list_item(category='tops'))
     
     # polyvore_triplet_dataset = PolyvoreTripletDataset(
     #     polyvore_items=polyvore_items,

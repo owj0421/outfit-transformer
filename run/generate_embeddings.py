@@ -47,15 +47,11 @@ def parse_args():
     )
     parser.add_argument(
         '--save_dir',
-        type=str, default="./index"
+        type=str, default="./db"
     )
     parser.add_argument(
         '--checkpoint',
         type=str, default=None
-    )
-    parser.add_argument(
-        '--demo',
-        action='store_true'
     )
     parser.add_argument(
         '--num_shards',
@@ -64,6 +60,10 @@ def parse_args():
     parser.add_argument(
         '--shard_id',
         type=int, default=0
+    )
+    parser.add_argument(
+        '--demo',
+        action='store_true'
     )
     return parser.parse_args()
 
