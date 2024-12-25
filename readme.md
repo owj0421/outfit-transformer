@@ -1,8 +1,6 @@
-<div style="width: 100%;">
-  <img src="title.svg" style="width: 100%;" alt="Click to see the source">
-</div>
+# Outfit Transformer: Outfit Representations for Fashion Recommendation
 
-## 🤗 Introduction
+## Introduction
 
 This repository contains the implementation of the Outfit Transformer, inspired by the original paper:
 
@@ -12,7 +10,7 @@ Our implementation not only faithfully reproduces the method presented in the pa
 
 <div align="center"> <img src = https://github.com/owj0421/outfit-transformer/assets/98876272/fc39d1c7-b076-495d-8213-3b98ef038b64 width = 512> </div>
 
-## 🎯 Performance
+## Performance
 
 <div align="center">
 
@@ -27,12 +25,12 @@ Our implementation not only faithfully reproduces the method presented in the pa
 
 </div>
 
-## 📥 Download
+## Download
 The model is trained on the Polyvore dataset. Since the official download link is no longer available, you can download the dataset from [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
-## 🛠️ Settings
+## Settings
 This repository is built under the project ![fashion_recommenders](https://github.com/owj0421/fashion-recommenders).
 
 ### Installation
@@ -53,7 +51,7 @@ python -m run.build_db \
 --db_dir $PATH/TO/SAVE/ITEM/METADATA
 ```
 
-## 🚀 Training
+## Training
 Follow the steps below to train the model:
 
 **Step 1: Train the model for Compatibility Prediction**
@@ -103,7 +101,7 @@ python -m run.train \
 ```
 </details>
 
-## 🧪 Evaluation
+## Evaluation
 
 Follow the steps below to evaluate model for each task:
 
@@ -145,7 +143,7 @@ python -m run.test \
 ```
 </details>
 
-## 🎬 Demo
+## Demo
 
 Follow the steps below to run the demo for each task:
 
@@ -196,8 +194,8 @@ Follow the steps below to run the demo for each task:
     ```
 </details>
 
-## 🔔 Note
+## Note
 This is **NON-OFFICIAL** implementation. (The official repo has not been released.)
 
-## 📜 License
+## License
 This code is licensed under the MIT License.
