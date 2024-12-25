@@ -37,7 +37,7 @@
           animation: hi 1.5s linear -0.5s infinite;
           display: inline-block;
           transform-origin: 70% 70%;
-          padding: 0px 12px 0px 12px ;
+          margin: 0 12px 8px 12px ;
         }
 
         @media (prefers-reduced-motion) {
@@ -53,12 +53,12 @@
         .title.main {
             font-size: 24px;
             font-weight: 600;
-            padding: 0 0 0 0;
+            margin: 0 0 2px 0;
         }
         .title.sub {
             font-size: 10px;
             font-weight: 100;
-            padding: 0 0 0 0;
+            margin: 0 0 0 0;
         }
       </style>
 
