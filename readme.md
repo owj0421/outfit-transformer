@@ -153,7 +153,7 @@ Follow the steps below to run the demo for each task:
 
 1. Run demo
     ```
-    python -m run.demo \
+    python -m run.5_demo \
     --task cp \
     --model_type clip \
     --checkpoint $PATH/OF/MODEL/.PT/FILE \
@@ -185,7 +185,7 @@ Follow the steps below to run the demo for each task:
     ```
 3. Run Demo
     ```
-    python -m run.demo \
+    python -m run.5_demo \
     --task cir \
     --model_type clip \
     --checkpoint $PATH/OF/MODEL/.PT/FILE \
