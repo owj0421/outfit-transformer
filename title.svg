@@ -37,7 +37,7 @@
           animation: hi 1.5s linear -0.5s infinite;
           display: inline-block;
           transform-origin: 70% 70%;
-          padding: 0px 12px 12px 12px ;
+          padding: 0px 12px 0px 12px ;
         }
 
         @media (prefers-reduced-motion) {
