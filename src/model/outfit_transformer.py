@@ -9,13 +9,18 @@ import numpy as np
 import torch
 
 from .encoder import Resnet18ImageEncoder, HuggingFaceTextEncoder, aggregate_embeddings
-from ..utils.elements import Item, Outfit, Query
 import torch.nn.functional as F
 
+import os
+import sys
+from fashion_recommenders.fashion_recommenders.utils.elements import Item, Outfit, Query
+
+# 현재 실행 중인 스크립트 파일의 디렉토리 경로를 얻습니다.
+current_dir = os.path.dirname(os.path.abspath(__file__))
 
 @dataclass
 class OutfitTransformerConfig:
-    query_image_path: str = "./src/datasets/question.jpg"
+    query_image_path: str = os.path.join(current_dir, "../utils/question.jpg")
     
     embedding_size: int = 128
     d_encoder_output: int = 128

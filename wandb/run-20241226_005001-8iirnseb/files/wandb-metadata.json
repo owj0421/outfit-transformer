@@ -1,0 +1,69 @@
+{
+  "os": "Linux-5.15.167.4-microsoft-standard-WSL2-x86_64-with-glibc2.35",
+  "python": "CPython 3.10.15",
+  "startedAt": "2024-12-25T15:50:01.393140Z",
+  "args": [
+    "--model_type",
+    "clip",
+    "--db_dir",
+    "/home/owj0421/projects/fashion_recommenders/db",
+    "--polyvore_dir",
+    "/home/owj0421/datasets/polyvore",
+    "--polyvore_type",
+    "nondisjoint",
+    "--task",
+    "cir",
+    "--batch_sz",
+    "2",
+    "--n_workers",
+    "4",
+    "--n_epochs",
+    "6",
+    "--lr",
+    "1e-4",
+    "--accumulation_steps",
+    "2",
+    "--wandb_key",
+    "fa37a3c4d1befcb0a7b9b4d33799c7bdbff1f81f",
+    "--save_dir",
+    "/home/owj0421/projects/outfit_transformer/checkpoints/trash",
+    "--checkpoint",
+    "/home/owj0421/projects/outfit_transformer/checkpoints/cir-clip-best/epoch_4_acc_0.663_loss_0.037/model.pt",
+    "--demo"
+  ],
+  "program": "-m run.train",
+  "git": {
+    "remote": "https://github.com/owj0421/outfit-transformer.git",
+    "commit": "54c4a061f36e283aaefe268e9047bcf2f5a5e10b"
+  },
+  "email": "owj0421@korea.ac.kr",
+  "root": "/home/owj0421/projects/outfit_transformer",
+  "host": "DESKTOP-0JN8HPO",
+  "username": "owj0421",
+  "executable": "/home/owj0421/miniconda3/envs/outfit-transformer/bin/python",
+  "cpu_count": 8,
+  "cpu_count_logical": 16,
+  "gpu": "NVIDIA GeForce RTX 4070 Ti SUPER",
+  "gpu_count": 1,
+  "disk": {
+    "/": {
+      "total": "1081101176832",
+      "used": "192345915392"
+    }
+  },
+  "memory": {
+    "total": "8292483072"
+  },
+  "cpu": {
+    "count": 8,
+    "countLogical": 16
+  },
+  "gpu_nvidia": [
+    {
+      "name": "NVIDIA GeForce RTX 4070 Ti SUPER",
+      "memoryTotal": "17171480576",
+      "architecture": "Ada"
+    }
+  ],
+  "cudaVersion": "12.6"
+}

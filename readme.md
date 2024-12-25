@@ -31,10 +31,24 @@ The model is trained on the Polyvore dataset. Since the official download link i
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
 ## 🛠️ Settings
+This repository is built under the project ![fashion_recommenders](https://github.com/owj0421/fashion-recommenders).
 
-Follow the instructions below to install the required dependencies:
+### Installation
+To install the required dependencies, run:
+```
+pip install fashion_recommenders==0.0.4
+```
+Additionally, install all other dependencies from the requirements.txt file:
 ```
 pip install -r requirements.txt
+```
+
+### Database Setup
+Before running the code, you need to build the database. Use the following command to set it up:
+```
+python -m run.build_db \
+--polyvore_dir $PATH/TO/LOAD/POLYVORE \
+--db_dir $PATH/TO/SAVE/ITEM/METADATA
 ```
 
 ## 🚀 Training
@@ -48,16 +62,17 @@ Start by training the model for the Compatibility Prediction (CP) task:
 ```
 python -m run.train \
 --model_type clip \
---polyvore_dir $POLYVORE_DIR \
+--db_dir $PATH/TO/LOAD/ITEM/METADATA \
+--polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
 --task cp \
---batch_sz 64 \
+--batch_sz 32 \
 --n_workers 4 \
 --n_epochs 16 \
 --lr 1e-4 \
 --accumulation_steps 2 \
---wandb_key $WANDB_KEY \
---save_dir $CHECKPOINT_DIR
+--wandb_key $YOUR/WANDB/API/KEY \
+--save_dir $PATH/TO/SAVE/MODEL/.PT/FILE
 ```
 </details>
 
@@ -71,17 +86,18 @@ After completing Step 1, use the checkpoint with the best accuracy from the Comp
 ```
 python -m run.train \
 --model_type clip \
---polyvore_dir $POLYVORE_DIR \
+--db_dir $PATH/TO/LOAD/ITEM/METADATA \
+--polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
 --task cir \
---batch_sz 64 \
+--batch_sz 232 \
 --n_workers 4 \
 --n_epochs 6 \
 --lr 1e-4 \
---accumulation_steps 4 \
---wandb_key $WANDB_KEY \
---save_dir $CHECKPOINT_DIR
---checkpoint $CHECKPOINT
+--accumulation_steps 2 \
+--wandb_key $YOUR/WANDB/API/KEY \
+--save_dir $PATH/TO/SAVE/MODEL/.PT/FILE \
+--checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
 </details>
 
@@ -96,13 +112,14 @@ Follow the steps below to evaluate model for each task:
 ```
 python -m run.test \
 --model_type clip \
---polyvore_dir $POLYVORE_DIR \
+--db_dir $PATH/TO/LOAD/ITEM/METADATA \
+--polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
---task cp \
+--task cir \
 --batch_sz 64 \
 --n_workers 4 \
---result_dir $RESULT_DIR \
---checkpoint $CHECKPOINT
+--result_dir $PATH/TO/SAVE/RESULTS \
+--checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
 </details>
 
@@ -115,13 +132,14 @@ python -m run.test \
 ```
 python -m run.test \
 --model_type clip \
---polyvore_dir $POLYVORE_DIR \
+--db_dir $PATH/TO/LOAD/ITEM/METADATA \
+--polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
---task fitb \
---batch_sz 32 \
+--task cir \
+--batch_sz 64 \
 --n_workers 4 \
---result_dir $RESULT_DIR \
---checkpoint $CHECKPOINT
+--result_dir $PATH/TO/SAVE/RESULTS \
+--checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
 </details>
 
@@ -136,10 +154,11 @@ Follow the steps below to run the demo for each task:
 1. Run demo
     ```
     python -m run.demo \
-    --model_type clip \
-    --polyvore_dir $POLYVORE_DIR \
     --task cp \
-    --checkpoint $CHECKPOINT \
+    --model_type clip \
+    --checkpoint $PATH/OF/MODEL/.PT/FILE \
+    --db_dir $PATH/TO/LOAD/ITEM/METADATA \
+    --index_dir $PATH/TO/SAVE/FAISS/INDEX
     ```
 </details>
 
@@ -151,23 +170,27 @@ Follow the steps below to run the demo for each task:
 
 1. Generate Item Embeddings
     ```
-    python -m run.generate_embeddings \
+    python -m run.3_generate_embeddings \
     --model_type clip \
-    --polyvore_dir $POLYVORE_DIR \
-    --batch_sz 16 \
-    --checkpoint $CHECKPOINT \
+    --batch_sz 64 \
+    --checkpoint $PATH/OF/MODEL/.PT/FILE \
+    --db_dir $PATH/TO/LOAD/ITEM/METADATA \
+    --embeddings_dir $PATH/TO/SAVE/EMBEDDINGS \
     ```
 2. Build Faiss Index.
     ```
-    python -m run.build_index \
+    python -m run.4_build_index \
+    --embeddings_dir $PATH/TO/LOAD/EMBEDDINGS \
+    --index_dir $PATH/TO/SAVE/FAISS/INDEX
     ```
 3. Run Demo
     ```
     python -m run.demo \
-    --model_type clip \
-    --polyvore_dir $POLYVORE_DIR \
     --task cir \
-    --checkpoint $CHECKPOINT \
+    --model_type clip \
+    --checkpoint $PATH/OF/MODEL/.PT/FILE \
+    --db_dir $PATH/TO/LOAD/ITEM/METADATA \
+    --index_dir $PATH/TO/SAVE/FAISS/INDEX
     ```
 </details>
 

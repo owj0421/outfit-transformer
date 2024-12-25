@@ -1,0 +1,65 @@
+_wandb:
+    value:
+        cli_version: 0.19.0
+        m: []
+        python_version: 3.10.15
+        t:
+            "1":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 55
+                - 105
+            "2":
+                - 1
+                - 5
+                - 11
+                - 41
+                - 49
+                - 53
+                - 55
+                - 105
+            "3":
+                - 16
+                - 23
+                - 55
+            "4": 3.10.15
+            "5": 0.19.0
+            "6": 4.46.2
+            "8":
+                - 5
+            "12": 0.19.0
+            "13": linux-x86_64
+accumulation_steps:
+    value: 2
+batch_sz:
+    value: 2
+checkpoint:
+    value: null
+db_dir:
+    value: /home/owj0421/projects/fashion_recommenders/db
+demo:
+    value: true
+lr:
+    value: 0.0001
+model_type:
+    value: clip
+n_epochs:
+    value: 16
+n_workers:
+    value: 4
+polyvore_dir:
+    value: /home/owj0421/datasets/polyvore
+polyvore_type:
+    value: nondisjoint
+save_dir:
+    value: /home/owj0421/projects/outfit_transformer/checkpoints/trash
+seed:
+    value: 42
+task:
+    value: cp
+wandb_key:
+    value: fa37a3c4d1befcb0a7b9b4d33799c7bdbff1f81f

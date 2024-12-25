@@ -9,8 +9,8 @@ from .outfit_clip_transformer import (
 )
 
 
-def load_model(args):
-    if args.model_type == 'original':
+def load_model(model_type, checkpoint):
+    if model_type == 'original':
         cfg = OutfitTransformerConfig(
             nhead=16, #16
             num_layers=6, #6
@@ -21,7 +21,7 @@ def load_model(args):
             cfg
         ).cuda()
 
-    elif args.model_type == 'clip':
+    elif model_type == 'clip':
         cfg = OutfitClipTransformerConfig(
             nhead=16,
             num_layers=4,
@@ -32,15 +32,15 @@ def load_model(args):
             cfg
         ).cuda()
         
-    if args.checkpoint:
+    if checkpoint:
         model.load_state_dict(
             torch.load(
-                args.checkpoint
+                checkpoint
             ),
             strict=False
         )
         print(
-            f"Loaded model from checkpoint: {args.checkpoint}"
+            f"Loaded model from checkpoint: {checkpoint}"
         )
             
     return model

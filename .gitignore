@@ -1,7 +1,7 @@
-wandb/
-checkpoints/
-results/
-db/
+src/wandb/
+src/checkpoints/
+src/results/
+src/db/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
