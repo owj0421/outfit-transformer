@@ -1,4 +1,4 @@
-src/wandb/
+wandb/
 src/checkpoints/
 src/results/
 src/db/
