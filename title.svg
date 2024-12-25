@@ -1,0 +1,82 @@
+<svg fill="none" viewBox="0 0 600 120" width="600" height="120" xmlns="http://www.w3.org/2000/svg">
+  <foreignObject width="100%" height="100%">
+    <div xmlns="http://www.w3.org/1999/xhtml">
+    
+      <style>
+        @import url(//fonts.googleapis.com/earlyaccess/notosanskr.css); 
+        @keyframes hi  {
+            0% { transform: rotate( 0.0deg) }
+           10% { transform: rotate(14.0deg) }
+           20% { transform: rotate(-8.0deg) }
+           30% { transform: rotate(14.0deg) }
+           40% { transform: rotate(-4.0deg) }
+           50% { transform: rotate(10.0deg) }
+           60% { transform: rotate( 0.0deg) }
+          100% { transform: rotate( 0.0deg) }
+        }
+
+        .container {
+          background: linear-gradient(to right,rgb(100, 50, 255),rgb(150, 100, 255)); /* 그라데이션 배경 */
+          width: 100%;
+          height: 120px;
+          box-sizing: border-box;
+          padding: 24px;
+          display: flex;
+          justify-content: left;
+          align-items: center;
+          border-radius: 8px;
+        }
+        .container.title {
+          justify-content: left; /* 가로 중앙 정렬 */
+          align-items: stretch; /* 위 아래로 정렬 */
+        }
+
+        .hi {
+          font-size: 32px;
+          animation: hi 1.5s linear -0.5s infinite;
+          display: inline-block;
+          transform-origin: 70% 70%;
+          padding: 0 8px 0 4px ;
+        }
+
+        @media (prefers-reduced-motion) {
+          .hi {
+            animation: none;
+          }
+        }
+        .title {
+            color: white;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 600;
+        }
+        .title.main {
+            font-size: 24px;
+            font-weight: 600;
+            padding: 2px 0 0 0;
+        }
+        .title.sub {
+            font-size: 10px;
+            font-weight: 100;
+            padding: 0 0 0 1px;
+        }
+      </style>
+
+      <div class="container">
+        <div class="hi">
+          🧷
+        </div>
+        <div class="container.title">
+          <div class="title main">
+            Outfit Transformer
+          </div>
+          <div class="title sub">
+            : Outfit Representations for Fashion Recommendation
+          </div>
+        </div>
+
+        
+
+      </div>
+    </div>
+  </foreignObject>
+</svg>

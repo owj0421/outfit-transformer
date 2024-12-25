@@ -1,4 +1,6 @@
-# <div align="center"> Outfit Transformer: Outfit Representations for Fashion Recommendation </div>
+<div style="width: 100%;">
+  <img src="title.svg" style="width: 100%;" alt="Click to see the source">
+</div>
 
 ## 🤗 Introduction
 
