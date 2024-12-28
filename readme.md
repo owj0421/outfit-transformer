@@ -31,12 +31,12 @@ The model is trained on the Polyvore dataset. Since the official download link i
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
 ## Settings
-This repository is built under the project ![fashion_recommenders](https://github.com/owj0421/fashion-recommenders).
+This repository is built under the project [fashion_recommenders](https://github.com/owj0421/fashion-recommenders).
 
 ### Installation
 To install the required dependencies, run:
 ```
-pip install fashion_recommenders==0.0.4
+pip install fashion_recommenders==0.0.16
 ```
 Additionally, install all other dependencies from the requirements.txt file:
 ```

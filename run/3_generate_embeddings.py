@@ -15,7 +15,7 @@ from src.utils.utils import (
 from tqdm import tqdm
 import pickle
 import sys
-from fashion_recommenders.fashion_recommenders.data.loader import SQLiteItemLoader
+from fashion_recommenders.data.loader import SQLiteItemLoader
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 

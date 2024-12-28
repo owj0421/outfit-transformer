@@ -13,7 +13,7 @@ import torch.nn.functional as F
 
 import os
 import sys
-from fashion_recommenders.fashion_recommenders.utils.elements import Item, Outfit, Query
+from fashion_recommenders.utils.elements import Item, Outfit, Query
 
 # 현재 실행 중인 스크립트 파일의 디렉토리 경로를 얻습니다.
 current_dir = os.path.dirname(os.path.abspath(__file__))

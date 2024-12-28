@@ -18,9 +18,9 @@ from src.model.load import (
 )
 
 import sys
-from fashion_recommenders.fashion_recommenders.data.loader import SQLiteItemLoader
-from fashion_recommenders.fashion_recommenders.data.indexer import FAISSIndexer
-from fashion_recommenders.fashion_recommenders.utils.demo import demo
+from fashion_recommenders.data.loader import SQLiteItemLoader
+from fashion_recommenders.data.indexer import FAISSIndexer
+from fashion_recommenders.utils.demo import demo
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 

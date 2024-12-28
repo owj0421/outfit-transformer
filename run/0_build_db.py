@@ -1,6 +1,6 @@
 import sys
-from fashion_recommenders.fashion_recommenders.data.loader import SQLiteItemLoader
-from fashion_recommenders.fashion_recommenders.utils.elements import Item
+from fashion_recommenders.data.loader import SQLiteItemLoader
+from fashion_recommenders.utils.elements import Item
 
 import json
 import os

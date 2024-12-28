@@ -14,8 +14,8 @@ from src.utils import slurm
 from argparse import ArgumentParser
 
 import sys
-from fashion_recommenders.fashion_recommenders.data.indexer import FAISSIndexer
-from fashion_recommenders.fashion_recommenders.data.loader import SQLiteItemLoader
+from fashion_recommenders.data.indexer import FAISSIndexer
+from fashion_recommenders.data.loader import SQLiteItemLoader
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 

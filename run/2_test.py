@@ -14,10 +14,10 @@ from src.utils.utils import (
     seed_everything,
 )
 import sys
-from fashion_recommenders.fashion_recommenders.utils.elements import Item, Outfit, Query
-from fashion_recommenders.fashion_recommenders.utils.metrics import score_cp, score_fitb
-from fashion_recommenders.fashion_recommenders.data.loader import SQLiteItemLoader
-from fashion_recommenders.fashion_recommenders.data.datasets import polyvore
+from fashion_recommenders.utils.elements import Item, Outfit, Query
+from fashion_recommenders.utils.metrics import score_cp, score_fitb
+from fashion_recommenders.data.loader import SQLiteItemLoader
+from fashion_recommenders.data.datasets import polyvore
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
