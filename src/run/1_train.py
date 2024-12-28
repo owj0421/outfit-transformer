@@ -6,13 +6,13 @@ import numpy as np
 from tqdm import tqdm
 from argparse import ArgumentParser
 from torch.utils.data import DataLoader
-from src.model.load import (
+from ..model.load import (
     load_model
 )
-from src.utils.loss import (
+from ..utils.loss import (
     focal_loss,
 )
-from src.utils.utils import (
+from ..utils.utils import (
     seed_everything,
 )
 

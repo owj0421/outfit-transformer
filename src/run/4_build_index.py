@@ -10,7 +10,7 @@ import os
 import argparse
 import pickle
 
-from src.utils import slurm
+from ..utils import slurm
 from argparse import ArgumentParser
 
 import sys

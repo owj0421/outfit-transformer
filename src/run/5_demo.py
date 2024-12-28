@@ -10,14 +10,19 @@ import os
 import argparse
 import pickle
 
-from src.utils import slurm
+from ..utils import slurm
 from argparse import ArgumentParser
 
-from src.model.load import (
+from ..model.load import (
     load_model
 )
 
 import sys
+
+from ..pipeline import (
+    OutfitTransformerCIRPipeline,
+    OutfitTransformerCPPipeline
+)
 from fashion_recommenders.data.loader import SQLiteItemLoader
 from fashion_recommenders.data.indexer import FAISSIndexer
 from fashion_recommenders.utils.demo import demo
@@ -57,13 +62,20 @@ def main(args):
         checkpoint=args.checkpoint
     )
     model.eval()
-    demo(
-        model=model,
-        item_loader=loader,
-        task='cir',
-        indexer=indexer,
-    )
     
+    if args.task == 'cir':
+        pipeline = OutfitTransformerCIRPipeline(
+            model=model,
+            loader=loader,
+            indexer=indexer
+        )
+    elif args.task == 'cp':
+        pipeline = OutfitTransformerCPPipeline(
+            model=model,
+            loader=loader
+        )
+        
+    demo(pipeline=pipeline)
 
 if __name__ == "__main__":
     args = parse_args()

@@ -36,7 +36,7 @@ This repository is built under the project [fashion_recommenders](https://github
 ### Installation
 To install the required dependencies, run:
 ```
-pip install fashion_recommenders==0.0.16
+pip install fashion_recommenders==0.0.17
 ```
 Additionally, install all other dependencies from the requirements.txt file:
 ```
@@ -46,7 +46,7 @@ pip install -r requirements.txt
 ### Database Setup
 Before running the code, you need to build the database. Use the following command to set it up:
 ```
-python -m run.build_db \
+python -m src.run.0_build_db \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --db_dir $PATH/TO/SAVE/ITEM/METADATA
 ```
@@ -60,7 +60,7 @@ Start by training the model for the Compatibility Prediction (CP) task:
 <summary>Click to expand</summary>
 
 ```
-python -m run.train \
+python -m src.run.1_train \
 --model_type clip \
 --db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
@@ -84,7 +84,7 @@ After completing Step 1, use the checkpoint with the best accuracy from the Comp
 <summary>Click to expand</summary>
 
 ```
-python -m run.train \
+python -m src.run.1_train \
 --model_type clip \
 --db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
@@ -110,7 +110,7 @@ Follow the steps below to evaluate model for each task:
 <summary>Click to expand</summary>
 
 ```
-python -m run.test \
+python -m src.run.2_test \
 --model_type clip \
 --db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
@@ -130,7 +130,7 @@ python -m run.test \
 <summary>Click to expand</summary>
 
 ```
-python -m run.test \
+python -m src.run.2_test \
 --model_type clip \
 --db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
@@ -153,7 +153,7 @@ Follow the steps below to run the demo for each task:
 
 1. Run demo
     ```
-    python -m run.5_demo \
+    python -m src.run.5_demo \
     --task cp \
     --model_type clip \
     --checkpoint $PATH/OF/MODEL/.PT/FILE \
@@ -170,7 +170,7 @@ Follow the steps below to run the demo for each task:
 
 1. Generate Item Embeddings
     ```
-    python -m run.3_generate_embeddings \
+    python -m src.run.3_generate_embeddings \
     --model_type clip \
     --batch_sz 64 \
     --checkpoint $PATH/OF/MODEL/.PT/FILE \
@@ -179,13 +179,13 @@ Follow the steps below to run the demo for each task:
     ```
 2. Build Faiss Index.
     ```
-    python -m run.4_build_index \
+    python -m src.run.4_build_index \
     --embeddings_dir $PATH/TO/LOAD/EMBEDDINGS \
     --index_dir $PATH/TO/SAVE/FAISS/INDEX
     ```
 3. Run Demo
     ```
-    python -m run.5_demo \
+    python -m src.run.5_demo \
     --task cir \
     --model_type clip \
     --checkpoint $PATH/OF/MODEL/.PT/FILE \
