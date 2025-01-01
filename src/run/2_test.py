@@ -57,7 +57,7 @@ def parse_args():
     )
     parser.add_argument(
         '--result_dir',
-        type=str, default=None, default='./src/results'
+        type=str, default='./src/results'
     )
     parser.add_argument(
         '--checkpoint',

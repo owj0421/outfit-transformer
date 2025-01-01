@@ -78,7 +78,7 @@ def parse_args():
     )
     parser.add_argument(
         '--save_dir',
-        type=str, default=None, default='./src/checkpoints'
+        type=str, default='./src/checkpoints'
     )
     parser.add_argument(
         '--checkpoint',
