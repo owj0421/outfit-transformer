@@ -1,10 +1,21 @@
-import sys
-from fashion_recommenders.data.loader import SQLiteItemLoader
-from fashion_recommenders.utils.elements import Item
-
-import json
 import os
+import sys
+import json
 from argparse import ArgumentParser
+from PIL import Image
+from fashion_recommenders.stores.metadata import ItemMetadataStore
+from fashion_recommenders import datatypes
+from fashion_recommenders.datasets.polyvore import POLYVORE_METADATA_PATH
+from tqdm import tqdm
+
+import pathlib
+
+
+SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
+CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
+LOADER_DIR = SRC_DIR / 'stores'
+RESULT_DIR = SRC_DIR / 'results'
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -12,37 +23,46 @@ def parse_args():
         '--polyvore_dir', 
         type=str, required=True
     )
-    parser.add_argument(
-        "--db_dir", type=str, default="./src/db",
-        help="dir path to save index"
-    )
     return parser.parse_args()
+
 
 def main(args):
     print(
         "Building database from Polyvore"
     )
-    loader = SQLiteItemLoader(
-        db_dir=args.db_dir,
-        # image_dir=os.path.join(args.polyvore_dir, 'images'),
+    loader = ItemMetadataStore(
+        database_name='polyvore',
+        table_name='items',
+        base_dir=LOADER_DIR
     )
-
-    with open(os.path.join(args.polyvore_dir, 'item', 'metadata.json'), 'r') as f:
+    
+    path = POLYVORE_METADATA_PATH.format(
+        dataset_dir=args.polyvore_dir
+    )
+    with open(path, 'r') as f:
         metadatas = json.load(f)
         
-    items = [
-        Item(
-            item_id=int(item_id),
-            image=None,
-            image_path=os.path.join(args.polyvore_dir, 'images', str(item_id) + '.jpg'),
-            description=item_['title'] if item_['title'] else item_['url_name'], 
-            category=item_['semantic_category'].lower().strip()
-        ) for item_id, item_ in metadatas.items()
-    ]
-    loader.add(items)
-
-    del loader
+    items = []
     
+    for item in tqdm(metadatas):
+        image_path=os.path.join(args.polyvore_dir, 'images', str(item['item_id']) + '.jpg')
+        
+        # Load Image PIL
+        image = Image.open(image_path)
+        image = image.convert('RGB')
+            
+        items.append(datatypes.FashionItem(
+            item_id=item['item_id'],
+            category=item['semantic_category'].lower().strip(),
+            image=image,
+            description=item['title'] if item['title'] else item['url_name'], 
+            metadata={}
+        ))
+        
+        if len(items) == 1000:
+            loader.add(items)
+            items = []
+            
     print(
         "Database built."
     )

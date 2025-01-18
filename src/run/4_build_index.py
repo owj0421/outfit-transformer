@@ -1,23 +1,39 @@
 import os
-import argparse
 import json
-import pickle
-import time
-import glob
+import wandb
+import torch
+import numpy as np
 from tqdm import tqdm
-import os
-
-import argparse
-import pickle
-
-from ..utils import slurm
 from argparse import ArgumentParser
-
+from torch.utils.data import DataLoader
+from ..model.load import (
+    load_model
+)
+from ..utils.utils import (
+    seed_everything,
+)
+from tqdm import tqdm
+import pickle
 import sys
-from fashion_recommenders.data.indexer import FAISSIndexer
-from fashion_recommenders.data.loader import SQLiteItemLoader
+import glob
+from fashion_recommenders import datatypes
+from fashion_recommenders.datasets import polyvore
+from fashion_recommenders.stores.metadata import ItemMetadataStore
+from fashion_recommenders.stores.vector import ItemVectorStore
+# from fashion_recommenders.utils.metrics import score_cp, score_fitb
+from fashion_recommenders.metrics.compatibility import CompatibilityMetricCalculator
+from fashion_recommenders.metrics.complementary import ComplementaryMetricCalculator
+
+import pathlib
+
+
+SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
+CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
+LOADER_DIR = SRC_DIR / 'stores'
+RESULT_DIR = SRC_DIR / 'results'
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -25,28 +41,20 @@ def parse_args():
         "--embedding_sz", type=int, default=128,
         help=""
     )
-    parser.add_argument(
-        "--embeddings_dir", type=str, default="./src/db",
-        help="dir path to embeddings"
-    )
-    parser.add_argument(
-        "--index_dir", type=str, default="./src/db",
-        help="dir path to save index"
-    )
     return parser.parse_args()
 
 
 def main(args):
-    indexer = FAISSIndexer(
-        index_dir=args.index_dir,
-        embedding_sz=args.embedding_sz
+    indexer = ItemVectorStore(
+        index_name='polyvore',
+        faiss_type='IndexFlatL2',
+        base_dir=LOADER_DIR,
+        d_embed=args.embedding_sz
     )
 
     pattern = 'embeddings_[0-9][0-9]_of_[0-9][0-9]*'
     matching_files = glob.glob(
-        os.path.join(
-            args.embeddings_dir, pattern
-        )
+        os.path.join(LOADER_DIR, pattern)
     )
     pbar = tqdm(
         matching_files, 
@@ -54,19 +62,13 @@ def main(args):
         postfix={"file": None}
     )
     for file_path in pbar:
-        pbar.set_postfix(
-            file=os.path.basename(file_path)
-        )
+        pbar.set_postfix(file=os.path.basename(file_path))
         with open(file_path, 'rb') as file:
             ids, embeddings = pickle.load(file)
-            indexer.build(
-                ids=ids, 
-                embeddings=embeddings
-            )
+            indexer.add(embeddings=embeddings, ids=ids)
     indexer.save()
     
 
 if __name__ == "__main__":
     args = parse_args()
-    slurm.init_distributed_mode(args)
     main(args)

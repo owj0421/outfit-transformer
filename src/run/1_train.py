@@ -18,13 +18,24 @@ from ..utils.utils import (
 
 import sys
 
-from fashion_recommenders.utils.elements import Item, Outfit, Query
-from fashion_recommenders.utils.metrics import score_cp, score_fitb
-from fashion_recommenders.data.loader import SQLiteItemLoader
-from fashion_recommenders.data.datasets import polyvore
+from fashion_recommenders import datatypes
+from fashion_recommenders.datasets import polyvore
+from fashion_recommenders.stores.metadata import ItemMetadataStore
 
+# from fashion_recommenders.utils.metrics import score_cp, score_fitb
+from fashion_recommenders.metrics.compatibility import CompatibilityMetricCalculator
+from fashion_recommenders.metrics.complementary import ComplementaryMetricCalculator
+
+import pathlib
+
+
+SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
+CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
+LOADER_DIR = SRC_DIR / 'stores'
+RESULT_DIR = SRC_DIR / 'results'
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -35,10 +46,6 @@ def parse_args():
     parser.add_argument(
         '--model_type', 
         type=str, required=True, choices=['original', 'clip'], default='original'
-    )
-    parser.add_argument(
-        '--db_dir', 
-        type=str, required=True, default='./src/db'
     )
     parser.add_argument(
         '--polyvore_dir', 
@@ -77,10 +84,6 @@ def parse_args():
         type=int, default=42
     )
     parser.add_argument(
-        '--save_dir',
-        type=str, default='./src/checkpoints'
-    )
-    parser.add_argument(
         '--checkpoint',
         type=str, default=None
     )
@@ -92,23 +95,25 @@ def parse_args():
 
 
 def cp_train(args):
-    save_dir = os.path.join(
-        args.save_dir, f"{args.task}-{args.model_type}-{wandb.run.name}"
+    metric = CompatibilityMetricCalculator()
+    
+    loader = ItemMetadataStore(
+        database_name='polyvore',
+        table_name='items',
+        base_dir=LOADER_DIR
     )
     
-    # Load Data
-    loader = SQLiteItemLoader(
-        db_dir=args.db_dir,
-        # image_dir=os.path.join(args.polyvore_dir, 'images'),
+    train = polyvore.PolyvoreCompatibilityDataset(
+        loader, 
+        dataset_dir=args.polyvore_dir,
+        dataset_type=args.polyvore_type,
+        dataset_split='train'
     )
-    train, valid = polyvore.PolyvoreCompatibilityDataset(
+    valid = polyvore.PolyvoreCompatibilityDataset(
+        loader, 
         dataset_dir=args.polyvore_dir,
-        polyvore_type=args.polyvore_type,
-        split='train'
-    ), polyvore.PolyvoreCompatibilityDataset(
-        dataset_dir=args.polyvore_dir,
-        polyvore_type=args.polyvore_type,
-        split='valid'
+        dataset_type=args.polyvore_type,
+        dataset_split='valid'
     )
     train_dataloader = DataLoader(
         dataset=train,
@@ -125,7 +130,7 @@ def cp_train(args):
         collate_fn=valid.collate_fn
     )
     
-    # Load Model
+
     model = load_model(
         model_type=args.model_type,
         checkpoint=args.checkpoint
@@ -151,161 +156,146 @@ def cp_train(args):
     
     for epoch in range(args.n_epochs):
         model.train()
+        
         pbar = tqdm(
             train_dataloader,
-            desc=f'Train | Epoch {epoch+1}/{args.n_epochs}'
+            desc=f'[Train] Epoch {epoch+1}/{args.n_epochs}'
         )
         for i, data in enumerate(pbar):
             if args.demo and i > 10:
                 break
             n_train_steps += 1
             
-            label = torch.FloatTensor(data['label']).cuda()
-            outfits = [
-                Outfit(items=[loader(int(item_id)) for item_id in batch])
-                for batch in data['question']
-            ]
-            pred = model.predict(
-                outfits=outfits
-            ).squeeze()
-            loss = loss_fn(
-                y_prob=pred, 
-                y_true=label
-            ) / args.accumulation_steps
-            score = score_cp(
-                pred=pred,
-                label=label,
-                compute_auc=False
-            )
+            labels = torch.FloatTensor(data['label']).cuda()
+            queries = data['query']
+            
+            predictions = model.predict(queries=queries).squeeze()
+            
+            loss = loss_fn(y_prob=predictions, y_true=labels) 
+            loss = loss / args.accumulation_steps
             loss.backward()
             
             if (n_train_steps + 1) % args.accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad() 
-                
             if scheduler:
                 scheduler.step()
-                
+            
+            score = metric.add(
+                predictions=predictions.detach().cpu().numpy(),
+                labels=labels.detach().cpu().numpy()
+            )
+            score = {
+                f'train_{key}': value
+                for key, value in score.items()
+            }
             if args.wandb_key:
                 log = {
                     'train_loss': loss * args.accumulation_steps,
-                    'train_acc': score["acc"],
                     'n_train_steps': n_train_steps,
-                    'lr': float(scheduler.get_last_lr()[0]) if scheduler else args.lr
+                    'lr': float(scheduler.get_last_lr()[0]) if scheduler else args.lr,
+                    **score
                 }
                 wandb.log(log)
             pbar.set_postfix(
                 loss=loss.item() * args.accumulation_steps,
-                acc=score["acc"] * 100
+                **score
             )
-
+        score = metric.calculate()
+        print(f'[Train] Epoch {epoch+1}/{args.n_epochs} --> {score}')
+        
+        
         model.eval()
         pbar = tqdm(
             valid_dataloader,
-            desc=f'Valid | Epoch {epoch+1}/{args.n_epochs}'
+            desc=f'[Valid] Epoch {epoch+1}/{args.n_epochs}'
         )
-        all_pred, all_label = [], []
         with torch.no_grad():
             for i, data in enumerate(pbar):
                 if args.demo and i > 10:
                     break
-                n_eval_steps += 1
+                n_train_steps += 1
                 
-                label = torch.FloatTensor(data['label']).cuda()
-                outfits = [
-                    Outfit(items=[loader(item_id) for item_id in q])
-                    for q in data['question']
-                ]
-                pred = model.predict(
-                    outfits=outfits
-                ).squeeze()
-                loss = loss_fn(
-                    y_prob=pred,
-                    y_true=label
-                ) / args.accumulation_steps
-                score = score_cp(
-                    pred=pred,
-                    label=label,
-                    compute_auc=False
+                labels = torch.FloatTensor(data['label']).cuda()
+                queries = data['query']
+                
+                predictions = model.predict(queries=queries).squeeze()
+            
+                loss = loss_fn(y_prob=predictions, y_true=labels) 
+                loss = loss / args.accumulation_steps
+            
+                score = metric.add(
+                    predictions=predictions.detach().cpu().numpy(),
+                    labels=labels.detach().cpu().numpy()
                 )
-                all_pred.append(pred.detach().cpu())
-                all_label.append(label.detach().cpu())
+                score = {
+                    f'valid_{key}': value
+                    for key, value in score.items()
+                }
                 if args.wandb_key:
                     log = {
                         'valid_loss': loss * args.accumulation_steps,
-                        'valid_acc': score["acc"],
-                        'n_eval_steps': n_eval_steps,
+                        'n_valid_steps': n_eval_steps,
+                        **score
                     }
                     wandb.log(log)
                 pbar.set_postfix(
                     loss=loss.item() * args.accumulation_steps,
-                    acc=score["acc"] * 100
+                    **score
                 )
                 
-        all_pred = torch.cat(all_pred)
-        all_label = torch.cat(all_label)
-        score = score_cp(
-            pred=all_pred,
-            label=all_label,
-            compute_auc=True
+        score = metric.calculate()
+        print(f'[Valid] Epoch {epoch+1}/{args.n_epochs} --> {score}')
+
+
+        save_dir = os.path.join(
+            CHECKPOINT_DIR, 
+            f"{args.task}-{args.model_type}-{wandb.run.name}", 
+            f'epoch_{epoch+1}_acc_{score["acc"]:.3f}_auc_{score["auc"]:.3f}_loss_{loss:.3f}'
         )
-        loss = loss_fn(
-            y_prob=all_pred, 
-            y_true=all_label
-        )
-        print(
-            f'--> Epoch {epoch+1}/{args.n_epochs} | Valid Loss: {loss:.3f} | Valid Acc: {score["acc"]:.3f} | Valid AUC: {score["auc"]:.3f}'
-        )
-        if args.save_dir:
-            epoch_save_dir = os.path.join(
-                save_dir, f'epoch_{epoch+1}_acc_{score["acc"]:.3f}_auc_{score["auc"]:.3f}_loss_{loss:.3f}'
-            )
-            if not os.path.exists(epoch_save_dir):
-                os.makedirs(epoch_save_dir, exist_ok=True)
-                
-            with open(os.path.join(epoch_save_dir, 'args.json'), 'w') as f:
-                json.dump(args.__dict__, f)
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir, exist_ok=True)
             
+        with open(os.path.join(save_dir, 'args.json'), 'w') as f:
+            json.dump(args.__dict__, f)
+        
+        torch.save(
+            obj=model.state_dict(),
+            f=os.path.join(save_dir, f'model.pt')
+        )
+        if optimizer:
             torch.save(
-                obj=model.state_dict(),
-                f=os.path.join(epoch_save_dir, f'model.pt')
+                obj=optimizer.state_dict(),
+                f=os.path.join(save_dir, f'optimizer.pt')
             )
-            if optimizer:
-                torch.save(
-                    obj=optimizer.state_dict(),
-                    f=os.path.join(epoch_save_dir, f'optimizer.pt')
-                )
-            if scheduler:
-                torch.save(
-                    obj=scheduler.state_dict(),
-                    f=os.path.join(epoch_save_dir, f'scheduler.pt')
-                )
-            print(
-                f'--> Saved at {epoch_save_dir}'
+        if scheduler:
+            torch.save(
+                obj=scheduler.state_dict(),
+                f=os.path.join(save_dir, f'scheduler.pt')
             )
+        print(f'[     ] Epoch {epoch+1}/{args.n_epochs} --> Saved at {save_dir}')
 
 
-def cir_train(args):
-    n_all_samples = 10
-    n_hard_samples = 10
-            
-    save_dir = os.path.join(
-        args.save_dir, f"{args.task}-{args.model_type}-{wandb.run.name}"
+def cir_train(args):       
+    metric = ComplementaryMetricCalculator()
+    
+    loader = ItemMetadataStore(
+        database_name='polyvore',
+        table_name='items',
+        base_dir=LOADER_DIR
     )
     
-    # Load Data
-    loader = SQLiteItemLoader(
-        db_dir=args.db_dir,
-        # image_dir=os.path.join(args.polyvore_dir, 'images'),
+    train = polyvore.PolyvoreTripletDataset(
+        loader, 
+        dataset_dir=args.polyvore_dir,
+        dataset_type=args.polyvore_type,
+        dataset_split='train'
     )
-    train, valid = polyvore.PolyvoreTripletDataset(
+    valid = polyvore.PolyvoreTripletDataset(
+        loader, 
         dataset_dir=args.polyvore_dir,
-        polyvore_type=args.polyvore_type,
-        split='train'
-    ), polyvore.PolyvoreFillInTheBlankDataset(
-        dataset_dir=args.polyvore_dir,
-        polyvore_type=args.polyvore_type,
-        split='valid'
+        dataset_type=args.polyvore_type,
+        dataset_split='valid'
     )
     train_dataloader = DataLoader(
         dataset=train,
@@ -331,7 +321,6 @@ def cir_train(args):
         model.parameters(),
         lr=args.lr
     )
-    
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=args.lr,  # 최대 학습률
@@ -342,123 +331,91 @@ def cir_train(args):
         div_factor=25,  # 초기 학습률 = max_lr / div_factor
         final_div_factor=1e4  # 최종 학습률 = max_lr / final_div_factor
     )
-    
     loss_fn = torch.nn.TripletMarginLoss(margin=2.0, p=2)
     
     n_train_steps = 0
     n_eval_steps = 0
+    
     for epoch in range(args.n_epochs):
         model.train()
         pbar = tqdm(
             train_dataloader,
-            desc=f'Train | Epoch {epoch+1}/{args.n_epochs}'
+            desc=f'[Train] Epoch {epoch+1}/{args.n_epochs}'
         )
         for i, data in enumerate(pbar):
             if args.demo and i > 10:
                 break
-            
             n_train_steps += 1
 
-            batch_sz = len(data['anchor'])
+            queries = data['query']
+            query_embedddings = model.embed_query(
+                queries=queries
+            )
             
-            query = [
-                Query(
-                    query=loader.get_category(int(p[0])),
-                    items=[loader(int(item_id)) for item_id in a]
-                )
-                for a, p in zip(data['anchor'], data['positive'])
-            ]
-            pos = [
-                loader(int(p[0]))
-                for p in data['positive']
-            ]
-            all_negs = [
-                negative_item
-                for _ in data['positive'] 
-                for negative_item in loader.sample_items(n_all_samples)
-            ]
-            hard_negs = [
-                negative_item
-                for p in data['positive'] 
-                for negative_item in loader.sample_items_by_id(int(p[0]), n_hard_samples)
-            ]
+            answers = data['answer']
+            answer_embedddings = model.embed_item(
+                items=answers
+            ).unsqueeze(1) 
+            
+            negative_embeddings = []
+            for i in range(args.batch_sz):
+                in_batch_negatives = [
+                    answer_embedddings[j, 0, :] for j in range(args.batch_sz) if i != j
+                ]
+                negative_embeddings.append(torch.stack(in_batch_negatives))
+            negative_embeddings = torch.stack(negative_embeddings)
 
-            query_embed = model.embed_query(
-                query=query
-            ) # [batch_sz, dim]
-            pos_embed = model.embed_item(
-                item=pos
-            ) # [batch_sz, dim]
-            all_neg_embeds = torch.cat(
-                [
-                    model.embed_item(
-                        item=all_negs[i*batch_sz:(i+1)*batch_sz]
-                    )
-                    for i in range(n_all_samples)
-                ],
-                dim=0
-            ).view(batch_sz, n_all_samples, -1)
-            hard_neg_embeds = torch.cat(
-                [
-                    model.embed_item(
-                        item=hard_negs[i*batch_sz:(i+1)*batch_sz]
-                    )
-                    for i in range(n_hard_samples)
-                ],
-                dim=0
-            ).view(batch_sz, n_hard_samples, -1)
-            candidate_embeds = torch.cat(
-                [pos_embed.unsqueeze(1), all_neg_embeds, hard_neg_embeds],
+            candidate_embedddings = torch.cat(
+                [answer_embedddings, negative_embeddings],
                 dim=1
-            ) # [batch_sz, 1 + n_all_samples + n_hard_samples, dim]
-            
-            batch_sz, n_candidates, d_embed = candidate_embeds.size()
+            )
+            labels = np.zeros(args.batch_sz)
             
             loss = 0
-            for i in range(1, n_candidates):
+            for i in range(1, args.batch_sz):
                 loss += loss_fn(
-                    query_embed,
-                    candidate_embeds[:, 0, :],
-                    candidate_embeds[:, i, :]
-                ) / (n_candidates - 1)
-            
-            loss = loss / args.accumulation_steps
-            loss.backward()
-            
-            with torch.no_grad():
-                # anchor - positive거리가 가장 짧은지 측정
-                _, score = score_fitb(
-                    query_embed=query_embed,
-                    candidate_embeds=candidate_embeds,
-                    label=torch.zeros(batch_sz).cuda()
+                    query_embedddings,
+                    candidate_embedddings[:, 0, :],
+                    candidate_embedddings[:, i, :]
                 )
-            
+            loss = loss / (args.accumulation_steps * (args.batch_sz-1))
+            loss.backward()
             if (n_train_steps + 1) % args.accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
-                
             if scheduler:
                 scheduler.step()
-                
+             
+            score = metric.add(
+                query_embeddings=query_embedddings.detach().cpu().numpy(),
+                candidate_embeddings=candidate_embedddings.detach().cpu().numpy(),
+                labels=labels
+            )
+            score = {
+                f'train_{key}': value
+                for key, value in score.items()
+            }
             if args.wandb_key:
                 log = {
                     'train_loss': loss * args.accumulation_steps,
                     'n_train_steps': n_train_steps,
-                    "acc": score["acc"],
-                    'lr': float(scheduler.get_last_lr()[0]) if scheduler else args.lr
+                    'lr': float(scheduler.get_last_lr()[0]) if scheduler else args.lr,
+                    **score
                 }
                 wandb.log(log)
             pbar.set_postfix(
                 loss=loss.item() * args.accumulation_steps,
-                acc=score["acc"] * 100
+                **score
             )
+            
+        score = metric.calculate()
+        print(f'[Train] Epoch {epoch+1}/{args.n_epochs} --> {score}')
 
         model.eval()
         pbar = tqdm(
             valid_dataloader,
-            desc=f'Valid | Epoch {epoch+1}/{args.n_epochs}'
+            desc=f'[Valid] Epoch {epoch+1}/{args.n_epochs}'
         )
-        all_pred, all_label = [], []
         with torch.no_grad():
             for i, data in enumerate(pbar):
                 if args.demo and i > 10:
@@ -466,99 +423,91 @@ def cir_train(args):
             
                 n_eval_steps += 1
                 
-                label = torch.Tensor(data['label']).cuda() # List of [batch_sz]
-            
-                batch_sz = len(data['question'])
-                n_candidates = len(data['candidates'][0])
+                queries = data['query']
+                query_embedddings = model.embed_query(
+                    queries=queries
+                )
                 
-                query = [
-                    Query(query=loader.get_category(int(cs[int(l)])),
-                          items=[loader(item_id) for item_id in q])
-                    for q, cs, l in zip(data['question'], data['candidates'], data['label'])
-                ]
-                candidate_outfits = [
-                    loader(c)
-                    for cs in data['candidates'] for c in cs
-                ]
-                query_embed = model.embed_query(
-                    query=query
-                ) # [batch_sz, dim]
-                candidate_embeds = torch.cat(
-                    [
-                        model.embed_item(
-                            item=candidate_outfits[i*batch_sz:(i+1)*batch_sz]
-                        )
-                        for i in range(n_candidates)
-                    ],
-                    dim=0
-                ).view(batch_sz, n_candidates, -1)
+                answers = data['answer']
+                answer_embedddings = model.embed_item(
+                    items=answers
+                ).unsqueeze(1) 
+                
+                negative_embeddings = []
+                for i in range(args.batch_sz):
+                    in_batch_negatives = [
+                        answer_embedddings[j, 0, :] for j in range(args.batch_sz) if i != j
+                    ]
+                    negative_embeddings.append(torch.stack(in_batch_negatives))
+                negative_embeddings = torch.stack(negative_embeddings)
+
+                candidate_embedddings = torch.cat(
+                    [answer_embedddings, negative_embeddings],
+                    dim=1
+                )
+                labels = np.zeros(args.batch_sz)
                 
                 loss = 0
-                for i in range(1, n_candidates):
+                for i in range(1, args.batch_sz):
                     loss += loss_fn(
-                        query_embed,
-                        candidate_embeds[:, 0, :],
-                        candidate_embeds[:, i, :]
-                    ) / (n_candidates - 1)
+                        query_embedddings,
+                        candidate_embedddings[:, 0, :],
+                        candidate_embedddings[:, i, :]
+                    )
+                loss = loss / (args.accumulation_steps * (args.batch_sz-1))
                 
-                loss = loss / args.accumulation_steps
-                
-                pred, score = score_fitb(
-                    query_embed=query_embed,
-                    candidate_embeds=candidate_embeds,
-                    label=label.cuda()
+                score = metric.add(
+                    query_embeddings=query_embedddings.detach().cpu().numpy(),
+                    candidate_embeddings=candidate_embedddings.detach().cpu().numpy(),
+                    labels=labels
                 )
-                all_pred.append(
-                    pred.detach().cpu()
-                )
-                all_label.append(
-                    label.detach().cpu()
-                )
+                score = {
+                    f'valid_{key}': value
+                    for key, value in score.items()
+                }
                 if args.wandb_key:
                     log = {
                         'valid_loss': loss * args.accumulation_steps,
-                        'valid_acc': score["acc"],
                         'n_eval_steps': n_eval_steps,
+                        **score
                     }
                     wandb.log(log)
                 pbar.set_postfix(
                     loss=loss.item() * args.accumulation_steps,
-                    acc=score["acc"] * 100
+                    **score
                 )
                 
-        all_pred = torch.cat(all_pred)
-        all_label = torch.cat(all_label)
-        acc = (all_pred == all_label).sum().item() / len(all_label)
+        score = metric.calculate()
         print(
-            f"--> Epoch {epoch+1}/{args.n_epochs} | Valid FITB Acc: {acc:.3f}"
+            f"[Valid] Epoch {epoch+1}/{args.n_epochs} --> {score}"
         )
-        if args.save_dir:
-            epoch_save_dir = os.path.join(
-                save_dir, f'epoch_{epoch+1}_acc_{acc:.3f}_loss_{loss:.3f}'
-            )
-            if not os.path.exists(epoch_save_dir):
-                os.makedirs(epoch_save_dir, exist_ok=True)
-                
-            with open(os.path.join(epoch_save_dir, 'args.json'), 'w') as f:
-                json.dump(args.__dict__, f)
+        
+        save_dir = os.path.join(
+            CHECKPOINT_DIR, 
+            f"{args.task}-{args.model_type}-{wandb.run.name}", 
+            f'epoch_{epoch+1}_acc_{score["acc"]:.3f}_loss_{loss:.3f}'
+        )
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir, exist_ok=True)
             
+        with open(os.path.join(save_dir, 'args.json'), 'w') as f:
+            json.dump(args.__dict__, f)
+        
+        torch.save(
+            obj=model.state_dict(),
+            f=os.path.join(save_dir, f'model.pt')
+        )
+        if optimizer:
             torch.save(
-                obj=model.state_dict(),
-                f=os.path.join(epoch_save_dir, f'model.pt')
+                obj=optimizer.state_dict(),
+                f=os.path.join(save_dir, f'optimizer.pt')
             )
-            if optimizer:
-                torch.save(
-                    obj=optimizer.state_dict(),
-                    f=os.path.join(epoch_save_dir, f'optimizer.pt')
-                )
-            if scheduler:
-                torch.save(
-                    obj=scheduler.state_dict(),
-                    f=os.path.join(epoch_save_dir, f'scheduler.pt')
-                )
-            print(
-                f'--> Saved at {epoch_save_dir}'
+        if scheduler:
+            torch.save(
+                obj=scheduler.state_dict(),
+                f=os.path.join(save_dir, f'scheduler.pt')
             )
+        print(f'[     ] Epoch {epoch+1}/{args.n_epochs} --> Saved at {save_dir}')
 
 
 if __name__ == '__main__':

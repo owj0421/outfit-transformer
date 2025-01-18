@@ -14,10 +14,19 @@ import pickle
 import os
 
 import sys
-from fashion_recommenders.utils.elements import Item, Outfit, Query
+from fashion_recommenders import datatypes
 from fashion_recommenders.models.encoders.image import CLIPImageEncoder
 from fashion_recommenders.models.encoders.text import CLIPTextEncoder
 from fashion_recommenders.utils.model_utils import aggregate_embeddings
+
+
+PAD_IMAGE = Image.fromarray(
+    np.zeros((224, 224, 3), dtype=np.uint8)
+)
+PAD_TEXT = ''
+PAD_IMAGE_EMBEDDING = torch.zeros(512)
+PAD_TEXT_EMBEDDING = torch.zeros(512)
+
 
 # 현재 실행 중인 스크립트 파일의 디렉토리 경로를 얻습니다.
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -50,12 +59,6 @@ class OutfitClipTransformerConfig:
 
 
 class OutfitClipTransformer(nn.Module):
-    PAD_IMAGE = Image.fromarray(
-        np.zeros((224, 224, 3), dtype=np.uint8)
-    )
-    PAD_TEXT = ''
-    PAD_IMAGE_EMBEDDING = torch.zeros(512)
-    PAD_TEXT_EMBEDDING = torch.zeros(512)
     
     def __init__(
         self,
@@ -112,7 +115,7 @@ class OutfitClipTransformer(nn.Module):
         
     def encode(
         self,
-        outfits: List[Outfit],
+        outfits: List[List[datatypes.FashionItem]],
         padding: Literal['longest', 'max_length'] = 'longest',
         truncation: bool = False,
         max_length: Optional[int] = None,
@@ -129,30 +132,22 @@ class OutfitClipTransformer(nn.Module):
             if padding == 'longest' else min(max_length, max([len(outfit) for outfit in outfits]))
         )
 
-        images, texts = [], []
-        mask = []
-        
+        images, texts, mask = [], [], []
         for outfit in outfits:
-            
             if truncation:
                 outfit = outfit[:max_length]
-            
+                
             images.append(
-                [
-                    item.image
-                    for item in outfit.items
-                ] + [self.PAD_IMAGE for _ in range(max_length - len(outfit))]
+                [item.image for item in outfit] \
+                + [PAD_IMAGE for _ in range(max_length - len(outfit))]
             )
             texts.append(
-                [
-                    item.description
-                    for item in outfit.items
-                ] + [self.PAD_TEXT for _ in range(max_length - len(outfit))]
+                [item.description for item in outfit] \
+                + [PAD_TEXT for _ in range(max_length - len(outfit))]
             )
             mask.append(
-                [
-                    0 for _ in outfit.items
-                ] + [1 for _ in range(max_length - len(outfit.items))]
+                [0 for _ in outfit] \
+                + [1 for _ in range(max_length - len(outfit))]
             )
 
         image_encoder_outputs = self.image_encoder(images)
@@ -172,16 +167,17 @@ class OutfitClipTransformer(nn.Module):
     
     def predict(
         self,
-        outfits: List[Outfit],
+        queries: List[datatypes.FashionCompatibilityQuery],
         *args, **kwargs
     ) -> Tensor:
         
-        assert isinstance(outfits, list), (
+        assert isinstance(queries, list), (
             "outfits must be a list of Outfit instances"
         )
         
-        bsz = len(outfits)
+        bsz = len(queries)
         
+        outfits = [query.outfit for query in queries]
         encoder_outputs, mask = self.encode(
             outfits, *args, **kwargs
         )
@@ -209,12 +205,17 @@ class OutfitClipTransformer(nn.Module):
     
     def embed_query(
         self,
-        query: List[Query],
+        queries: List[datatypes.FashionComplementaryQuery],
         *args, **kwargs
     ) -> Tensor:
+        query_items = [
+            datatypes.FashionItem(category=i.category, image=self.query_image, description=i.category)
+            for i in queries
+        ]
+        print(query_items)
         outfits = [
-            Outfit([Item(category='', image=self.query_image, description=query_.query)] + query_.items)
-            for query_ in query
+            [query_item] + i.outfit
+            for query_item, i in zip(query_items, queries)
         ]
         encoder_outputs, mask = self.encode(
             outfits, *args, **kwargs
@@ -233,13 +234,10 @@ class OutfitClipTransformer(nn.Module):
     
     def embed_item(
         self,
-        item: List[Item],
+        items: List[datatypes.FashionItem],
         *args, **kwargs
     ) -> Tensor:
-        outfits = [
-            Outfit([item_])
-            for item_ in item
-        ]
+        outfits = [[item] for item in items]
         encoder_outputs, mask = self.encode(
             outfits, *args, **kwargs
         )

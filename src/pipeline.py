@@ -1,33 +1,42 @@
-from fashion_recommenders.models.pipeline import BaseCPPipeline, BaseCIRPipeline
-from fashion_recommenders.utils.elements import Outfit, Item, Query
+from fashion_recommenders.pipeline import BasePipeline
+from fashion_recommenders import datatypes
 from typing import List
 
 
-class OutfitTransformerCPPipeline(BaseCPPipeline):
-
-    def predict(
+class OutfitTransformerPipeline(BasePipeline):
+    
+    def __init__(
         self,
-        outfits: List[Outfit]
+        model,
+        loader,
+        indexer
+    ):
+        self.model = model
+        self.loader = loader
+        self.indexer = indexer
+    
+    
+    def compatibility_predict(
+        self,
+        queries: List[datatypes.FashionCompatibilityQuery]
     ) -> List[float]:
         
         scores = self.model.predict(
-            outfits=outfits
+            queries=queries
         )
         scores = list(map(float, scores))
         
         return scores
-    
 
-class OutfitTransformerCIRPipeline(BaseCIRPipeline):
 
-    def search(
+    def complementary_search(
         self,
-        queries: List[Query],
+        queries: List[datatypes.FashionComplementaryQuery],
         k: int=12
-    ) -> List[List[Item]]:
+    ) -> List[List[datatypes.FashionItem]]:
         
         embeddings = self.model.embed_query(
-            query=queries
+            queries=queries
         ).detach().cpu().numpy() # (n_queries, emb_dim)
         
         results = self.indexer.search(
@@ -36,7 +45,7 @@ class OutfitTransformerCIRPipeline(BaseCIRPipeline):
         ) # (n_queries, k)
         
         results = [
-            [self.loader(str(item_id)) for item_id in result]
+            [self.loader.get_item(item_id) for item_id in result]
             for result in results 
         ]
         

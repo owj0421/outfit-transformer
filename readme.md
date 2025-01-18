@@ -46,7 +46,7 @@ pip install -r requirements.txt
 ### Database Setup
 Before running the code, you need to build the database. Use the following command to set it up:
 ```
-python -m src.run.0_build_db \
+python -m run.0_build_db \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --db_dir $PATH/TO/SAVE/ITEM/METADATA
 ```

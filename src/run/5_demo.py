@@ -1,33 +1,32 @@
 import os
-import argparse
 import json
-import pickle
-import time
-import glob
+import wandb
+import torch
+import numpy as np
 from tqdm import tqdm
-import os
-
-import argparse
-import pickle
-
-from ..utils import slurm
 from argparse import ArgumentParser
-
+from torch.utils.data import DataLoader
 from ..model.load import (
     load_model
 )
-
-import sys
-
-from ..pipeline import (
-    OutfitTransformerCIRPipeline,
-    OutfitTransformerCPPipeline
+from ..utils.utils import (
+    seed_everything,
 )
-from fashion_recommenders.data.loader import SQLiteItemLoader
-from fashion_recommenders.data.indexer import FAISSIndexer
-from fashion_recommenders.utils.demo import demo
+from ..pipeline import OutfitTransformerPipeline
+from fashion_recommenders.stores.metadata import ItemMetadataStore
+from fashion_recommenders.stores.vector import ItemVectorStore
+from fashion_recommenders import demo
+
+import pathlib
+
+
+SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
+CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
+LOADER_DIR = SRC_DIR / 'stores'
+RESULT_DIR = SRC_DIR / 'results'
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -40,42 +39,35 @@ def parse_args():
     parser.add_argument(
         '--checkpoint', type=str, default=None
     )
-    parser.add_argument(
-        "--db_dir", type=str, default="./src/db",
-    )
-    parser.add_argument(
-        "--index_dir", type=str, default="./src/db",
-    )
     return parser.parse_args()
 
 
 def main(args):
-    loader = SQLiteItemLoader(
-        db_dir=args.db_dir,
-        # image_dir=IMAGE_DIR,
-    )
-    indexer = FAISSIndexer(
-        index_dir=args.index_dir,
-    )
     model = load_model(
         model_type=args.model_type,
         checkpoint=args.checkpoint
     )
     model.eval()
     
-    if args.task == 'cir':
-        pipeline = OutfitTransformerCIRPipeline(
-            model=model,
-            loader=loader,
-            indexer=indexer
-        )
-    elif args.task == 'cp':
-        pipeline = OutfitTransformerCPPipeline(
-            model=model,
-            loader=loader
-        )
+    loader = ItemMetadataStore(
+        database_name='polyvore',
+        table_name='items',
+        base_dir=LOADER_DIR
+    )
+    indexer = ItemVectorStore(
+        index_name='polyvore',
+        faiss_type='IndexFlatL2',
+        base_dir=LOADER_DIR,
+        d_embed=128
+    )
+
+    pipeline = OutfitTransformerPipeline(
+        model=model,
+        loader=loader,
+        indexer=indexer
+    )
         
-    demo(pipeline=pipeline)
+    demo.run(pipeline=pipeline, task=args.task)
 
 if __name__ == "__main__":
     args = parse_args()

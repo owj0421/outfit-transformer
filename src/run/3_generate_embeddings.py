@@ -15,9 +15,24 @@ from ..utils.utils import (
 from tqdm import tqdm
 import pickle
 import sys
-from fashion_recommenders.data.loader import SQLiteItemLoader
+from fashion_recommenders import datatypes
+from fashion_recommenders.datasets import polyvore
+from fashion_recommenders.stores.metadata import ItemMetadataStore
+
+# from fashion_recommenders.utils.metrics import score_cp, score_fitb
+from fashion_recommenders.metrics.compatibility import CompatibilityMetricCalculator
+from fashion_recommenders.metrics.complementary import ComplementaryMetricCalculator
+
+import pathlib
+
+
+SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
+CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
+LOADER_DIR = SRC_DIR / 'stores'
+RESULT_DIR = SRC_DIR / 'results'
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 
 def parse_args():
     parser = ArgumentParser()
@@ -28,14 +43,6 @@ def parse_args():
     parser.add_argument(
         '--batch_sz', 
         type=int, default=128
-    )
-    parser.add_argument(
-        "--db_dir", type=str, default="./src/db",
-        help="dir path to save index"
-    )
-    parser.add_argument(
-        '--embeddings_dir',
-        type=str, default="./src/db"
     )
     parser.add_argument(
         '--checkpoint',
@@ -56,15 +63,18 @@ def parse_args():
     return parser.parse_args()
 
 
-if __name__ == "__main__":
-    args = parse_args()
+def main(args):
+    loader = ItemMetadataStore(
+        database_name='polyvore',
+        table_name='items',
+        base_dir=LOADER_DIR
+    )
+    
     model = load_model(
         model_type=args.model_type,
         checkpoint=args.checkpoint
     )
-    loader = SQLiteItemLoader(
-        db_dir=args.db_dir,
-    )
+    
     all_ids, all_embeddings = [], []
     batch_id, batch_item = [], []
     
@@ -89,7 +99,7 @@ if __name__ == "__main__":
             item_id = item_ids[i][0]
 
             batch_id.append(item_id)
-            batch_item.append(loader(item_id))
+            batch_item.append(loader.get_item(item_id))
             
             if len(batch_id) == args.batch_sz or i == len(item_ids) - 1:
                 batch_embedding = model.embed_item(batch_item)
@@ -103,11 +113,10 @@ if __name__ == "__main__":
     all_embeddings = torch.cat(all_embeddings, dim=0).detach().cpu().numpy()
     
     os.makedirs(
-        args.embeddings_dir, 
-        exist_ok=True
+        LOADER_DIR, exist_ok=True
     )
     save_file = os.path.join(
-        args.embeddings_dir, f"embeddings_{args.shard_id:02d}_of_{args.num_shards:02d}"
+        LOADER_DIR, f"embeddings_{args.shard_id:02d}_of_{args.num_shards:02d}"
     )
     with open(save_file, mode="wb") as f:
         pickle.dump((all_ids, all_embeddings), f)
@@ -115,3 +124,11 @@ if __name__ == "__main__":
     print(
         f"Embeddings saved to {save_file}"
     )
+    
+    
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    
+    main(args)
