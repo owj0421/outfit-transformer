@@ -19,6 +19,8 @@ from fashion_recommenders.models.encoders.image import CLIPImageEncoder
 from fashion_recommenders.models.encoders.text import CLIPTextEncoder
 from fashion_recommenders.utils.model_utils import aggregate_embeddings
 
+from . import outfit_transformer
+
 
 PAD_IMAGE = Image.fromarray(
     np.zeros((224, 224, 3), dtype=np.uint8)
@@ -58,7 +60,7 @@ class OutfitClipTransformerConfig:
             self.image_embedding_size = self.text_embedding_size = self.d_encoder_output
 
 
-class OutfitClipTransformer(nn.Module):
+class OutfitClipTransformer(outfit_transformer.OutfitTransformer):
     
     def __init__(
         self,
@@ -102,153 +104,3 @@ class OutfitClipTransformer(nn.Module):
             nn.Dropout(self.cfg.dropout),
             nn.Linear(cfg.d_model, cfg.embedding_size, bias=False)
         )
-        
-    @property
-    def device(self) -> torch.device:
-        """
-        Returns the device on which the model's parameters are stored.
-
-        Returns:
-            torch.device: The device of the model parameters.
-        """
-        return next(self.parameters()).device
-        
-    def encode(
-        self,
-        outfits: List[List[datatypes.FashionItem]],
-        padding: Literal['longest', 'max_length'] = 'longest',
-        truncation: bool = False,
-        max_length: Optional[int] = None,
-    ):
-        assert not ((padding == 'max_length') and (max_length is None)), (
-            "If padding is 'max_length', max_length must be provided"
-        )
-        assert not ((padding == 'longest') and (truncation is True)), (
-            "If padding is 'longest', truncation must be False"
-        )
-        
-        max_length = (
-            max([len(outfit) for outfit in outfits])
-            if padding == 'longest' else min(max_length, max([len(outfit) for outfit in outfits]))
-        )
-
-        images, texts, mask = [], [], []
-        for outfit in outfits:
-            if truncation:
-                outfit = outfit[:max_length]
-                
-            images.append(
-                [item.image for item in outfit] \
-                + [PAD_IMAGE for _ in range(max_length - len(outfit))]
-            )
-            texts.append(
-                [item.description for item in outfit] \
-                + [PAD_TEXT for _ in range(max_length - len(outfit))]
-            )
-            mask.append(
-                [0 for _ in outfit] \
-                + [1 for _ in range(max_length - len(outfit))]
-            )
-
-        image_encoder_outputs = self.image_encoder(images)
-        text_encoder_outputs = self.text_encoder(texts)
-            
-        encoder_outputs = aggregate_embeddings(
-            image_embeddings=image_encoder_outputs,
-            text_embeddings=text_encoder_outputs,
-            aggregation_method='concat'
-        )
-        
-        encoder_outputs = F.normalize(encoder_outputs, p=2, dim=-1)
-        
-        mask = torch.BoolTensor(mask).to(self.device)
-        
-        return encoder_outputs, mask
-    
-    def predict(
-        self,
-        queries: List[datatypes.FashionCompatibilityQuery],
-        *args, **kwargs
-    ) -> Tensor:
-        
-        assert isinstance(queries, list), (
-            "outfits must be a list of Outfit instances"
-        )
-        
-        bsz = len(queries)
-        
-        outfits = [query.outfit for query in queries]
-        encoder_outputs, mask = self.encode(
-            outfits, *args, **kwargs
-        )
-        encoder_outputs = torch.cat(
-            [
-                self.classifier_embedding.unsqueeze(0).expand(bsz, -1, -1), 
-                encoder_outputs
-            ], dim=1
-        )
-        mask = torch.cat(
-            [
-                torch.zeros(bsz, 1, dtype=torch.bool, device=self.device), 
-                mask
-            ], dim=1
-        )
-        last_hidden_states = self.transformer_encoder(
-            encoder_outputs, 
-            src_key_padding_mask=mask
-        )
-        outputs = self.classifier_ffn(
-            last_hidden_states[:, 0, :]
-        )
-        
-        return outputs
-    
-    def embed_query(
-        self,
-        queries: List[datatypes.FashionComplementaryQuery],
-        *args, **kwargs
-    ) -> Tensor:
-        query_items = [
-            datatypes.FashionItem(category=i.category, image=self.query_image, description=i.category)
-            for i in queries
-        ]
-        print(query_items)
-        outfits = [
-            [query_item] + i.outfit
-            for query_item, i in zip(query_items, queries)
-        ]
-        encoder_outputs, mask = self.encode(
-            outfits, *args, **kwargs
-        )
-        last_hidden_states = self.transformer_encoder(
-            encoder_outputs, 
-            src_key_padding_mask=mask
-        )
-        embeddings = self.embed_mlp(
-            last_hidden_states[:, 0, :]
-        )
-        if self.cfg.normlaize_embeddings:
-            embeddings = F.normalize(embeddings, p=2, dim=-1)
-        
-        return embeddings
-    
-    def embed_item(
-        self,
-        items: List[datatypes.FashionItem],
-        *args, **kwargs
-    ) -> Tensor:
-        outfits = [[item] for item in items]
-        encoder_outputs, mask = self.encode(
-            outfits, *args, **kwargs
-        )
-        last_hidden_states = self.transformer_encoder(
-            encoder_outputs, 
-            src_key_padding_mask=mask
-        )
-        embeddings = self.embed_mlp(
-            last_hidden_states[:, 0, :]
-        )
-        if self.cfg.normlaize_embeddings:
-            embeddings = F.normalize(embeddings, p=2, dim=-1)
-        
-        return embeddings

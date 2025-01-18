@@ -124,13 +124,11 @@ class OutfitTransformer(nn.Module):
             "If padding is 'longest', truncation must be False"
         )
         
-        outfits = outfits if isinstance(outfits, list) else [outfits]
-        
         max_length = (
             max([len(outfit) for outfit in outfits])
             if padding == 'longest' else min(max_length, max([len(outfit) for outfit in outfits]))
         )
-        
+
         images, texts, mask = [], [], []
         for outfit in outfits:
             if truncation:
@@ -151,7 +149,7 @@ class OutfitTransformer(nn.Module):
 
         image_encoder_outputs = self.image_encoder(images)
         text_encoder_outputs = self.text_encoder(texts)
-        
+            
         encoder_outputs = aggregate_embeddings(
             image_embeddings=image_encoder_outputs,
             text_embeddings=text_encoder_outputs,
@@ -211,6 +209,7 @@ class OutfitTransformer(nn.Module):
             datatypes.FashionItem(category=i.category, image=self.query_image, description=i.category)
             for i in queries
         ]
+        print(query_items)
         outfits = [
             [query_item] + i.outfit
             for query_item, i in zip(query_items, queries)

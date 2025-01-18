@@ -62,7 +62,6 @@ Start by training the model for the Compatibility Prediction (CP) task:
 ```
 python -m src.run.1_train \
 --model_type clip \
---db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
 --task cp \
@@ -72,7 +71,6 @@ python -m src.run.1_train \
 --lr 1e-4 \
 --accumulation_steps 2 \
 --wandb_key $YOUR/WANDB/API/KEY \
---save_dir $PATH/TO/SAVE/MODEL/.PT/FILE
 ```
 </details>
 
@@ -86,7 +84,6 @@ After completing Step 1, use the checkpoint with the best accuracy from the Comp
 ```
 python -m src.run.1_train \
 --model_type clip \
---db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
 --task cir \
@@ -96,7 +93,6 @@ python -m src.run.1_train \
 --lr 1e-4 \
 --accumulation_steps 2 \
 --wandb_key $YOUR/WANDB/API/KEY \
---save_dir $PATH/TO/SAVE/MODEL/.PT/FILE \
 --checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
 </details>
@@ -112,13 +108,11 @@ Follow the steps below to evaluate model for each task:
 ```
 python -m src.run.2_test \
 --model_type clip \
---db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
 --task cir \
 --batch_sz 64 \
 --n_workers 4 \
---result_dir $PATH/TO/SAVE/RESULTS \
 --checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
 </details>
@@ -132,13 +126,11 @@ python -m src.run.2_test \
 ```
 python -m src.run.2_test \
 --model_type clip \
---db_dir $PATH/TO/LOAD/ITEM/METADATA \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \
 --task cir \
 --batch_sz 64 \
 --n_workers 4 \
---result_dir $PATH/TO/SAVE/RESULTS \
 --checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
 </details>
@@ -156,9 +148,7 @@ Follow the steps below to run the demo for each task:
     python -m src.run.5_demo \
     --task cp \
     --model_type clip \
-    --checkpoint $PATH/OF/MODEL/.PT/FILE \
-    --db_dir $PATH/TO/LOAD/ITEM/METADATA \
-    --index_dir $PATH/TO/SAVE/FAISS/INDEX
+    --checkpoint $PATH/OF/MODEL/.PT/FILE
     ```
 </details>
 
@@ -173,24 +163,18 @@ Follow the steps below to run the demo for each task:
     python -m src.run.3_generate_embeddings \
     --model_type clip \
     --batch_sz 64 \
-    --checkpoint $PATH/OF/MODEL/.PT/FILE \
-    --db_dir $PATH/TO/LOAD/ITEM/METADATA \
-    --embeddings_dir $PATH/TO/SAVE/EMBEDDINGS \
+    --checkpoint $PATH/OF/MODEL/.PT/FILE
     ```
 2. Build Faiss Index.
     ```
-    python -m src.run.4_build_index \
-    --embeddings_dir $PATH/TO/LOAD/EMBEDDINGS \
-    --index_dir $PATH/TO/SAVE/FAISS/INDEX
+    python -m src.run.4_build_index
     ```
 3. Run Demo
     ```
     python -m src.run.5_demo \
     --task cir \
     --model_type clip \
-    --checkpoint $PATH/OF/MODEL/.PT/FILE \
-    --db_dir $PATH/TO/LOAD/ITEM/METADATA \
-    --index_dir $PATH/TO/SAVE/FAISS/INDEX
+    --checkpoint $PATH/OF/MODEL/.PT/FILE
     ```
 </details>
 
