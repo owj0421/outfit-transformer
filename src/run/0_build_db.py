@@ -62,6 +62,10 @@ def main(args):
         if len(items) == 1000:
             loader.add(items)
             items = []
+    
+    if items:
+        loader.add(items)
+        items = []
             
     print(
         "Database built."

@@ -186,12 +186,13 @@ def fitb_valid(args):
             answers = data['answers']
             answer_embedddings = model.embed_item(
                 items=sum(answers, [])
-            ).view(args.batch_sz, 4, -1)
+            ).view(args.batch_sz, 4, -1).detach().cpu().numpy()
+            answer_embedddings = [answer_embedddings[i] for i in range(args.batch_sz)]
             
             
             score = metric.add(
-                query_embeddings=query_embedddings.detach().cpu().numpy(),
-                candidate_embeddings=answer_embedddings.detach().cpu().numpy(),
+                query_embeddings=[q.detach().cpu().numpy() for q in query_embedddings],
+                candidate_embeddings=answer_embedddings,
                 labels=np.array(data['label'])
             )
             pbar.set_postfix(**score)

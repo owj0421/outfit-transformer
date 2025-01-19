@@ -346,6 +346,8 @@ def cir_train(args):
             if args.demo and i > 10:
                 break
             n_train_steps += 1
+            
+            labels = np.zeros(args.batch_sz)
 
             queries = data['query']
             query_embedddings = model.embed_query(
@@ -355,44 +357,43 @@ def cir_train(args):
             answers = data['answer']
             answer_embedddings = model.embed_item(
                 items=answers
-            ).unsqueeze(1) 
+            ) # (batch_sz, embedding_dim)
+            
+            n_candidates = args.batch_sz # 1 positive + n-1 negative
             
             negative_embeddings = []
             for i in range(args.batch_sz):
                 in_batch_negatives = [
-                    answer_embedddings[j, 0, :] for j in range(args.batch_sz) if i != j
+                    answer_embedddings[j, :] for j in range(args.batch_sz) if i != j
                 ]
                 negative_embeddings.append(torch.stack(in_batch_negatives))
-            negative_embeddings = torch.stack(negative_embeddings)
 
-            candidate_embedddings = torch.cat(
-                [answer_embedddings, negative_embeddings],
-                dim=1
-            )
-            labels = np.zeros(args.batch_sz)
+            candidate_embedddings = []
+            for i in range(args.batch_sz):
+                candidate_embedddings.append(
+                    torch.cat(
+                        [answer_embedddings[i].unsqueeze(0), negative_embeddings[i]],
+                        dim=0
+                    )
+                )
             
             loss = 0
-            for i in range(1, args.batch_sz):
-                loss += loss_fn(
-                    query_embedddings,
-                    candidate_embedddings[:, 0, :],
-                    candidate_embedddings[:, i, :]
-                )
-            loss = loss / (args.accumulation_steps * (args.batch_sz-1))
-            loss.backward()
-            if (n_train_steps + 1) % args.accumulation_steps == 0:
-                optimizer.step()
-                optimizer.zero_grad()
-            if scheduler:
-                scheduler.step()
-             
+            for b_i, (qs, cs) in enumerate(zip(query_embedddings, candidate_embedddings)):
+                for q_i in range(qs.shape[0]):
+                    loss += loss_fn(
+                        qs[q_i, :].unsqueeze(0).expand(n_candidates - 1, -1), # (n_candidates, embedding_dim)
+                        cs[0, :].unsqueeze(0).expand(n_candidates - 1, -1), # (n_candidates, embedding_dim)
+                        cs[1:, :] # (n_candidates-1, embedding_dim)
+                    )
+            loss = loss / (args.accumulation_steps * (b_i+1) * (q_i+1))
+            
             score = metric.add(
-                query_embeddings=query_embedddings.detach().cpu().numpy(),
-                candidate_embeddings=candidate_embedddings.detach().cpu().numpy(),
+                query_embeddings=[q.detach().cpu().numpy() for q in query_embedddings],
+                candidate_embeddings=[c.detach().cpu().numpy() for c in candidate_embedddings],
                 labels=labels
             )
             score = {
-                f'train_{key}': value
+                f'valid_{key}': value
                 for key, value in score.items()
             }
             if args.wandb_key:
@@ -420,8 +421,9 @@ def cir_train(args):
             for i, data in enumerate(pbar):
                 if args.demo and i > 10:
                     break
-            
                 n_eval_steps += 1
+                
+                labels = np.zeros(args.batch_sz)
                 
                 queries = data['query']
                 query_embedddings = model.embed_query(
@@ -431,34 +433,37 @@ def cir_train(args):
                 answers = data['answer']
                 answer_embedddings = model.embed_item(
                     items=answers
-                ).unsqueeze(1) 
+                )
                 
                 negative_embeddings = []
                 for i in range(args.batch_sz):
                     in_batch_negatives = [
-                        answer_embedddings[j, 0, :] for j in range(args.batch_sz) if i != j
+                        answer_embedddings[j, :] for j in range(args.batch_sz) if i != j
                     ]
                     negative_embeddings.append(torch.stack(in_batch_negatives))
-                negative_embeddings = torch.stack(negative_embeddings)
 
-                candidate_embedddings = torch.cat(
-                    [answer_embedddings, negative_embeddings],
-                    dim=1
-                )
-                labels = np.zeros(args.batch_sz)
+                candidate_embedddings = []
+                for i in range(args.batch_sz):
+                    candidate_embedddings.append(
+                        torch.cat(
+                            [answer_embedddings[i].unsqueeze(0), negative_embeddings[i]],
+                            dim=0
+                        )
+                    )
                 
                 loss = 0
-                for i in range(1, args.batch_sz):
-                    loss += loss_fn(
-                        query_embedddings,
-                        candidate_embedddings[:, 0, :],
-                        candidate_embedddings[:, i, :]
-                    )
-                loss = loss / (args.accumulation_steps * (args.batch_sz-1))
+                for b_i, (qs, cs) in enumerate(zip(query_embedddings, candidate_embedddings)):
+                    for q_i in range(qs.shape[0]):
+                        loss += loss_fn(
+                            qs[q_i, :].unsqueeze(0).expand(n_candidates - 1, -1), # (n_candidates, embedding_dim)
+                            cs[0, :].unsqueeze(0).expand(n_candidates - 1, -1), # (n_candidates, embedding_dim)
+                            cs[1:, :] # (n_candidates-1, embedding_dim)
+                        )
+                loss = loss / (args.accumulation_steps * (b_i+1) * (q_i+1))
                 
                 score = metric.add(
-                    query_embeddings=query_embedddings.detach().cpu().numpy(),
-                    candidate_embeddings=candidate_embedddings.detach().cpu().numpy(),
+                    query_embeddings=[q.detach().cpu().numpy() for q in query_embedddings],
+                    candidate_embeddings=[c.detach().cpu().numpy() for c in candidate_embedddings],
                     labels=labels
                 )
                 score = {

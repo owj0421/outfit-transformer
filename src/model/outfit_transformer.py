@@ -209,7 +209,6 @@ class OutfitTransformer(nn.Module):
             datatypes.FashionItem(category=i.category, image=self.query_image, description=i.category)
             for i in queries
         ]
-        print(query_items)
         outfits = [
             [query_item] + i.outfit
             for query_item, i in zip(query_items, queries)
@@ -226,6 +225,9 @@ class OutfitTransformer(nn.Module):
         )
         if self.cfg.normlaize_embeddings:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
+        # Match the shape
+        # (bsz, embedding_dim) to list of (1, embedding_dim)
+        embeddings = [embedding.unsqueeze(0) for embedding in embeddings]
         
         return embeddings
     
