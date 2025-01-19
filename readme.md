@@ -36,7 +36,7 @@ This repository is built under the project [fashion_recommenders](https://github
 ### Installation
 To install the required dependencies, run:
 ```
-pip install fashion_recommenders==0.1.0
+pip install fashion_recommenders==0.1.1
 ```
 Additionally, install all other dependencies from the requirements.txt file:
 ```

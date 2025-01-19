@@ -1,6 +1,7 @@
 from fashion_recommenders.pipeline import BasePipeline
 from fashion_recommenders import datatypes
 from typing import List
+from collections import defaultdict
 
 
 class OutfitTransformerPipeline(BasePipeline):
@@ -18,35 +19,35 @@ class OutfitTransformerPipeline(BasePipeline):
     
     def compatibility_predict(
         self,
-        queries: List[datatypes.FashionCompatibilityQuery]
+        query: datatypes.FashionCompatibilityQuery
     ) -> List[float]:
         
         scores = self.model.predict(
-            queries=queries
-        )
-        scores = list(map(float, scores))
+            queries=[query]
+        )[0]
+        scores = float(scores)
         
         return scores
 
 
     def complementary_search(
         self,
-        queries: List[datatypes.FashionComplementaryQuery],
+        query: datatypes.FashionComplementaryQuery,
         k: int=12
-    ) -> List[List[datatypes.FashionItem]]:
+    ) -> List[datatypes.FashionItem]:
         
         embeddings = self.model.embed_query(
-            queries=queries
-        ).detach().cpu().numpy() # (n_queries, emb_dim)
+            queries=[query]
+        ) # List of (1, embedding_dim)
+        embeddings = [e.detach().cpu().numpy() for e in embeddings] # List of (1, embedding_dim)
         
-        results = self.indexer.search(
+        # Reciprocal Search, Rank Fusion         
+        results = self.indexer.multi_vector_search(
             embeddings=embeddings,
             k=k
-        ) # (n_queries, k)
+        ) # List of num_query_items * k
         
-        results = [
-            [self.loader.get_item(item_id) for item_id in result]
-            for result in results 
-        ]
+        results = results[0]
+        results = [self.loader.get_item(item_id) for item_id in results]
         
         return results
