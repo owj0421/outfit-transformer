@@ -6,23 +6,14 @@ import numpy as np
 from tqdm import tqdm
 from argparse import ArgumentParser
 from torch.utils.data import DataLoader
-from ..model.load import (
-    load_model
-)
-from ..utils.utils import (
-    seed_everything,
-)
 from tqdm import tqdm
 import pickle
 import sys
 import glob
-from fashion_recommenders import datatypes
-from fashion_recommenders.datasets import polyvore
-from fashion_recommenders.stores.metadata import ItemMetadataStore
-from fashion_recommenders.stores.vector import ItemVectorStore
-# from fashion_recommenders.utils.metrics import score_cp, score_fitb
-from fashion_recommenders.metrics.compatibility import CompatibilityMetricCalculator
-from fashion_recommenders.metrics.complementary import ComplementaryMetricCalculator
+
+from ..models.load import load_model
+from ..utils.utils import seed_everything
+from ..demo.stores.vector import ItemVectorStore
 
 import pathlib
 

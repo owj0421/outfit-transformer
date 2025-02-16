@@ -3,10 +3,12 @@ import sys
 import json
 from argparse import ArgumentParser
 from PIL import Image
-from fashion_recommenders.stores.metadata import ItemMetadataStore
-from fashion_recommenders import datatypes
-from fashion_recommenders.datasets.polyvore import POLYVORE_METADATA_PATH
 from tqdm import tqdm
+
+from ..data import datatypes
+from ..data.datasets.polyvore import POLYVORE_METADATA_PATH
+from ..demo.stores.metadata import ItemMetadataStore
+
 
 import pathlib
 
@@ -55,7 +57,7 @@ def main(args):
             item_id=item['item_id'],
             category=item['semantic_category'].lower().strip(),
             image=image,
-            description=item['title'] if item['title'] else item['url_name'], 
+            description=item['url_name'], 
             metadata={}
         ))
         

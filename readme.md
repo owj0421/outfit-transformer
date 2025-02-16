@@ -30,15 +30,8 @@ The model is trained on the Polyvore dataset. Since the official download link i
 
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
-## Settings
-This repository is built under the project [fashion_recommenders](https://github.com/owj0421/fashion-recommenders).
-
 ### Installation
 To install the required dependencies, run:
-```
-pip install fashion_recommenders==0.1.1
-```
-Additionally, install all other dependencies from the requirements.txt file:
 ```
 pip install -r requirements.txt
 ```
@@ -60,7 +53,7 @@ Start by training the model for the Compatibility Prediction (CP) task:
 <summary>Click to expand</summary>
 
 ```
-python -m src.run.1_train \
+python -m src.run.1_train_compatibility \
 --model_type clip \
 --polyvore_dir $PATH/TO/LOAD/POLYVORE \
 --polyvore_type nondisjoint \

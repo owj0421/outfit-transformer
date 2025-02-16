@@ -6,16 +6,12 @@ import numpy as np
 from tqdm import tqdm
 from argparse import ArgumentParser
 from torch.utils.data import DataLoader
-from ..model.load import (
-    load_model
-)
-from ..utils.utils import (
-    seed_everything,
-)
-from ..pipeline import OutfitTransformerPipeline
-from fashion_recommenders.stores.metadata import ItemMetadataStore
-from fashion_recommenders.stores.vector import ItemVectorStore
-from fashion_recommenders import demo
+from ..models.load import load_model
+from ..utils.utils import seed_everything
+from ..demo.stores.vector import ItemVectorStore
+from ..demo.stores.metadata import ItemMetadataStore
+from ..demo.pipeline import OutfitTransformerPipeline
+from ..demo import demo
 
 import pathlib
 

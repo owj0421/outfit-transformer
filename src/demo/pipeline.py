@@ -1,8 +1,32 @@
-from fashion_recommenders.pipeline import BasePipeline
-from fashion_recommenders import datatypes
-from typing import List
-from collections import defaultdict
 
+from abc import ABC, abstractmethod
+from typing import List
+from ..data import datatypes
+        
+        
+class BasePipeline(ABC):
+    
+    @abstractmethod
+    def compatibility_predict(
+        self,
+        queries: List[datatypes.FashionCompatibilityQuery],
+    ) -> List[float]:
+        
+        raise NotImplementedError(
+            'The cp method must be implemented by subclasses.'
+        )
+
+    @abstractmethod
+    def complementary_search(
+        self,
+        queries: List[datatypes.FashionComplementaryQuery],
+        k: int,
+    ) -> List[List[datatypes.FashionItem]]:
+        
+        raise NotImplementedError(
+            'The cir method must be implemented by subclasses.'
+        )
+        
 
 class OutfitTransformerPipeline(BasePipeline):
     
@@ -22,7 +46,7 @@ class OutfitTransformerPipeline(BasePipeline):
         query: datatypes.FashionCompatibilityQuery
     ) -> List[float]:
         
-        scores = self.model.predict(
+        scores = self.model.calculate_compatibility_score(
             queries=[query]
         )[0]
         scores = float(scores)
@@ -36,14 +60,13 @@ class OutfitTransformerPipeline(BasePipeline):
         k: int=12
     ) -> List[datatypes.FashionItem]:
         
-        embeddings = self.model.embed_query(
+        embedding = self.model.embed_complementary_query(
             queries=[query]
-        ) # List of (1, embedding_dim)
-        embeddings = [e.detach().cpu().numpy() for e in embeddings] # List of (1, embedding_dim)
+        )[0].detach().cpu().numpy().tolist()
         
         # Reciprocal Search, Rank Fusion         
-        results = self.indexer.multi_vector_search(
-            embeddings=embeddings,
+        results = self.indexer.search(
+            embeddings=[embedding],
             k=k
         ) # List of num_query_items * k
         
