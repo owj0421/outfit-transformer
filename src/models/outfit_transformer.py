@@ -108,7 +108,7 @@ class OutfitTransformer(nn.Module):
                 [item.image for item in outfit] + [PAD_IMAGE] * (max_length - len(outfit))
             )
             texts.append(
-                [item.description for item in outfit] + [PAD_TEXT] * (max_length - len(outfit))
+                [f"Category: {item.category}; Description: {item.description}" for item in outfit] + [PAD_TEXT] * (max_length - len(outfit))
             )
             mask.append(
                 [0] * len(outfit) + [1] * (max_length - len(outfit))
