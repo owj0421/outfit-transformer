@@ -63,7 +63,7 @@ def parse_args():
     parser.add_argument('--model_type', type=str, choices=['original', 'clip'],
                         default='clip')
     parser.add_argument('--polyvore_dir', type=str, 
-                        default='./polyvore')
+                        default='./datasets/polyvore')
     parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'],
                         default='nondisjoint')
     parser.add_argument('--batch_sz_per_gpu', type=int,

@@ -35,9 +35,11 @@ conda env update -f environment.yml
 ```
 ### Download Dataset
 ```
-cd outfit-transformer
+mkdir datasets
+cd datasets
 gdown --id 1ox8GFHG8iMs64iiwITQhJ47dkQ0Q7SBu
 unzip polyvore.zip -d polyvore
+cd ../
 ```
 ### Download Checkpoint
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
