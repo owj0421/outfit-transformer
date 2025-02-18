@@ -16,46 +16,34 @@ import pathlib
 
 SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
 CHECKPOINT_DIR = SRC_DIR / 'checkpoints'
-LOADER_DIR = SRC_DIR / 'stores'
 RESULT_DIR = SRC_DIR / 'results'
-
+LOGS_DIR = SRC_DIR / 'logs'
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+os.makedirs(RESULT_DIR, exist_ok=True)
+os.makedirs(LOGS_DIR, exist_ok=True)
 
 def parse_args():
     parser = ArgumentParser()
-    parser.add_argument(
-        '--model_type', 
-        type=str, required=True, choices=['original', 'clip'], default='original'
-    )
-    parser.add_argument(
-        '--polyvore_dir', 
-        type=str, required=True
-    )
-    parser.add_argument(
-        '--polyvore_type', 
-        type=str, required=True, choices=['nondisjoint', 'disjoint']
-    )
-    parser.add_argument(
-        '--batch_sz', 
-        type=int, default=32
-    )
-    parser.add_argument(
-        '--n_workers', 
-        type=int, default=4
-    )
-    parser.add_argument(
-        '--seed', 
-        type=int, default=42
-    )
-    parser.add_argument(
-        '--checkpoint',
-        type=str, default=None
-    )
-    parser.add_argument(
-        '--demo',
-        action='store_true'
-    )
+    parser.add_argument('--model_type', type=str, choices=['original', 'clip'],
+                        default='clip')
+    parser.add_argument('--polyvore_dir', type=str, 
+                        default='./polyvore')
+    parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'],
+                        default='nondisjoint')
+    parser.add_argument('--batch_sz_per_gpu', type=int,
+                        default=64)
+    parser.add_argument('--n_workers_per_gpu', type=int,
+                        default=4)
+    parser.add_argument('--wandb_key', type=str, 
+                        default=None)
+    parser.add_argument('--seed', type=int, 
+                        default=42)
+    parser.add_argument('--checkpoint', type=str, 
+                        default=None)
+    parser.add_argument('--demo', action='store_true')
+    
     return parser.parse_args()
 
 
@@ -67,9 +55,9 @@ def validation(args):
     )
     test_dataloader = DataLoader(
         dataset=test,
-        batch_size=args.batch_sz,
+        batch_size=args.batch_sz_per_gpu,
         shuffle=False,
-        num_workers=args.n_workers,
+        num_workers=args.n_workers_per_gpu,
         collate_fn=test.collate_fn
     )
     
@@ -84,10 +72,10 @@ def validation(args):
     predictions, labels = [], []
     with torch.no_grad():
         for i, data in enumerate(pbar):
-            if args.demo and i > 10:
+            if args.demo and i > 2:
                 break
             labels_ = torch.tensor(data['label'], dtype=torch.float32, device='cuda')
-            predictions_ = model.calculate_compatibility_score(query=data['query']).squeeze(0)
+            predictions_ = model.calculate_compatibility_score(query=data['query']).squeeze(1)
             
             predictions.append(predictions_.detach().cpu().numpy())
             labels.append(labels_.detach().cpu().numpy())
@@ -104,14 +92,18 @@ def validation(args):
         result_dir = os.path.join(
             RESULT_DIR, args.checkpoint.split('/')[-2],
         )
-        os.makedirs(
-            result_dir, exist_ok=True
+    else:
+        result_dir = os.path.join(
+            RESULT_DIR, 'compatibility_demo',
         )
-        with open(os.path.join(result_dir, f'{args.task}_results.json'), 'w') as f:
-            json.dump(score, f)
-        print(
-            f"[Test] Compatibility --> Results saved to {result_dir}"
-        )
+    os.makedirs(
+        result_dir, exist_ok=True
+    )
+    with open(os.path.join(result_dir, f'results.json'), 'w') as f:
+        json.dump(score, f)
+    print(
+        f"[Test] Compatibility --> Results saved to {result_dir}"
+    )
 
 
 if __name__ == '__main__':

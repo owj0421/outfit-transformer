@@ -7,7 +7,7 @@ from .outfit_transformer import OutfitTransformer, OutfitTransformerConfig
 
 @dataclass
 class OutfitCLIPTransformerConfig(OutfitTransformerConfig):
-    enc_clip_model_name: str = "patrickjohncyh/fashion-clip"# "Marqo/marqo-fashionSigLIP"# 
+    enc_clip_model_name: str = "patrickjohncyh/fashion-clip"
             
 
 class OutfitCLIPTransformer(OutfitTransformer):

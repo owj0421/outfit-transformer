@@ -9,8 +9,9 @@ def compute_cir_scores(
     predictions: np.array,
     labels: np.array
 ):
+    acc = (predictions == labels).mean()
     return {
-        'acc': (predictions == labels).mean()
+        'acc': float(acc)
     }
 
 
@@ -34,9 +35,9 @@ def compute_cp_scores(
         auc = roc_auc_score(y_true=labels,y_score=predictions)
     
     return {
-        'acc': accuracy, 
-        'precision': precision, 
-        'recall': recall, 
-        'f1': f1,
-        'auc': auc
+        'acc': float(accuracy), 
+        'precision': float(precision), 
+        'recall': float(recall), 
+        'f1': float(f1),
+        'auc': float(auc)
     }

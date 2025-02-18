@@ -28,7 +28,7 @@ class OutfitTransformerConfig:
     
     enc_text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     enc_dim_per_modality: int = 128
-    enc_norm_out: bool = False
+    enc_norm_out: bool = True
     aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'
     
     transformer_n_head: int = 16
@@ -55,12 +55,9 @@ class OutfitTransformer(nn.Module):
         self._build_transformer_enc()
         # Classifier and Embedding Layers
         self._build_calc_cp_ffn()
+        self._build_embed_ffn()
         self.classifier_embedding = nn.parameter.Parameter(
             torch.randn(1, self.enc.d_out, requires_grad=True)
-        )
-        self.embed_ffn = nn.Sequential(
-            nn.Dropout(cfg.transformer_dropout),
-            nn.Linear(self.enc.d_out, cfg.d_embed, bias=False)
         )
         
     def _build_enc(self) -> OutfitTransformerEncoder:
@@ -91,6 +88,13 @@ class OutfitTransformer(nn.Module):
             nn.Dropout(self.cfg.transformer_dropout),
             nn.Linear(self.enc.d_out, 1, bias=False),
             nn.Sigmoid()
+        )
+        
+    def _build_embed_ffn(self) -> nn.Sequential:
+        """Builds the feed-forward embedding layer."""
+        self.embed_ffn = nn.Sequential(
+            nn.Dropout(self.cfg.transformer_dropout),
+            nn.Linear(self.enc.d_out, self.cfg.d_embed, bias=False)
         )
     
     def _pad_and_mask(self, outfits) -> Tuple[List, List, Tensor]:
@@ -123,14 +127,14 @@ class OutfitTransformer(nn.Module):
     
     def calculate_compatibility_score(
         self, 
-        queries: List[datatypes.FashionCompatibilityQuery], 
+        query: List[datatypes.FashionCompatibilityQuery], 
         *args, **kwargs
     ) -> Tensor:
         """
         Predicts the compatibility scores for the given queries.
         """
-        bsz = len(queries)
-        outfits = [query.outfit for query in queries]
+        bsz = len(query)
+        outfits = [query_.outfit for query_ in query]
         
         images, texts, mask = self._pad_and_mask(outfits)
         enc_outs = self.enc(images, texts)

@@ -10,22 +10,20 @@ from .outfit_clip_transformer import (
 
 
 def load_model(model_type, checkpoint):
+    if checkpoint:
+        state_dict = torch.load(checkpoint)
+        
     if model_type == 'original':
-        cfg = OutfitTransformerConfig()
-        model = OutfitTransformer(
-            cfg
-        ).cuda()
+        cfg = OutfitTransformerConfig(**state_dict['cfg']) if checkpoint else OutfitTransformerConfig()
+        model = OutfitTransformer(cfg).cuda()
 
     elif model_type == 'clip':
-        cfg = OutfitCLIPTransformerConfig()
-        model = OutfitCLIPTransformer(
-            cfg
-        ).cuda()
+        cfg = OutfitCLIPTransformerConfig(**state_dict['cfg']) if checkpoint else OutfitCLIPTransformerConfig()
+        model = OutfitCLIPTransformer(cfg).cuda()
         
     if checkpoint:
         model.load_state_dict(
-            torch.load(checkpoint),
-            strict=False
+            state_dict['model'], strict=False
         )
         print(
             f"Loaded model from checkpoint: {checkpoint}"

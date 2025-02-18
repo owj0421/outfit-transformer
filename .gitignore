@@ -2,8 +2,11 @@ wandb/
 checkpoints/
 results/
 stores/
+polyvore/
+logs/
 *.db
 *.faiss
+*.zip
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

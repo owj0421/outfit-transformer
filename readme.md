@@ -1,3 +1,12 @@
+git filter-branch --commit-filter '
+  	if [ "$GIT_AUTHOR_NAME" = "rlawldud53" ];
+        then
+          	GIT_AUTHOR_NAME="big_oh_one";
+   		    GIT_AUTHOR_EMAIL="owj0421@naver.com";
+      	git commit-tree "$@";
+	else
+      	git commit-tree "$@";
+	  	fi' HEAD
 # Outfit Transformer: Outfit Representations for Fashion Recommendation
 
 ## Introduction
@@ -25,116 +34,65 @@ Our implementation not only faithfully reproduces the method presented in the pa
 
 </div>
 
-## Download
-The model is trained on the Polyvore dataset. Since the official download link is no longer available, you can download the dataset from [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
+## Settings
 
+### Environment Setting
+```
+conda create -n outfit-transformer python=3.12.4
+conda activate outfit-transformer
+conda env update -f environment.yml
+```
+### Download Dataset
+```
+cd outfit-transformer
+gdown --id 1ox8GFHG8iMs64iiwITQhJ47dkQ0Q7SBu
+unzip polyvore.zip -d polyvore
+```
+### Download Checkpoint
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
-
-### Installation
-To install the required dependencies, run:
-```
-pip install -r requirements.txt
-```
-
-### Database Setup
-Before running the code, you need to build the database. Use the following command to set it up:
-```
-python -m run.0_build_db \
---polyvore_dir $PATH/TO/LOAD/POLYVORE \
---db_dir $PATH/TO/SAVE/ITEM/METADATA
-```
 
 ## Training
 Follow the steps below to train the model:
 
-**Step 1: Train the model for Compatibility Prediction**
-Start by training the model for the Compatibility Prediction (CP) task:
-<details>
-<summary>Click to expand</summary>
+### Step 1: Compatibility Prediction
+Start by training the model for the Compatibility Prediction (CP) task
 
+**Train**
 ```
 python -m src.run.1_train_compatibility \
---model_type clip \
---polyvore_dir $PATH/TO/LOAD/POLYVORE \
---polyvore_type nondisjoint \
---task cp \
---batch_sz 32 \
---n_workers 4 \
---n_epochs 16 \
---lr 1e-4 \
---accumulation_steps 2 \
---wandb_key $YOUR/WANDB/API/KEY \
+--wandb_key $YOUR/WANDB/API/KEY
 ```
-</details>
+**Test**
+```
+python -m src.run.1-1_test_compatibility \
+--checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
+```
 
 <br>
 
-**Step 2: Train for Complementary Item Retrieval using the best CP checkpoint**
+### Step 2: Complementary Item Retrieval
+
 After completing Step 1, use the checkpoint with the best accuracy from the Compatibility Prediction task to train the model for the Complementary Item Retrieval (CIR) task:
-<details>
-<summary>Click to expand</summary>
 
+**Train**
 ```
-python -m src.run.1_train \
---model_type clip \
---polyvore_dir $PATH/TO/LOAD/POLYVORE \
---polyvore_type nondisjoint \
---task cir \
---batch_sz 232 \
---n_workers 4 \
---n_epochs 6 \
---lr 1e-4 \
---accumulation_steps 2 \
+python -m src.run.2_train_complementary \
 --wandb_key $YOUR/WANDB/API/KEY \
 --checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
-</details>
-
-## Evaluation
-
-Follow the steps below to evaluate model for each task:
-
-**Compatibility Prediction**
-<details>
-<summary>Click to expand</summary>
-
+**Test**
 ```
-python -m src.run.2_test \
---model_type clip \
---polyvore_dir $PATH/TO/LOAD/POLYVORE \
---polyvore_type nondisjoint \
---task cir \
---batch_sz 64 \
---n_workers 4 \
+python -m src.run.2-1_test_complemenatry \
 --checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
 ```
-</details>
 
 <br>
-
-**Fill-in-the-blank**
-<details>
-<summary>Click to expand</summary>
-
-```
-python -m src.run.2_test \
---model_type clip \
---polyvore_dir $PATH/TO/LOAD/POLYVORE \
---polyvore_type nondisjoint \
---task cir \
---batch_sz 64 \
---n_workers 4 \
---checkpoint $PATH/TO/LOAD/MODEL/.PT/FILE
-```
-</details>
 
 ## Demo
 
 Follow the steps below to run the demo for each task:
 
 **Compatibility Prediction**
-<details>
-<summary>Click to expand</summary>
 
 1. Run demo
     ```
@@ -143,14 +101,17 @@ Follow the steps below to run the demo for each task:
     --model_type clip \
     --checkpoint $PATH/OF/MODEL/.PT/FILE
     ```
-</details>
 
 <br>
 
 **Complementary Item Retrieval**
-<details>
-<summary>Click to expand</summary>
 
+1. Build Database
+    ```
+    python -m run.3_build_db \
+    --polyvore_dir $PATH/TO/LOAD/POLYVORE \
+    --db_dir $PATH/TO/SAVE/ITEM/METADATA
+    ```
 1. Generate Item Embeddings
     ```
     python -m src.run.3_generate_embeddings \
@@ -169,7 +130,6 @@ Follow the steps below to run the demo for each task:
     --model_type clip \
     --checkpoint $PATH/OF/MODEL/.PT/FILE
     ```
-</details>
 
 ## Note
 This is **NON-OFFICIAL** implementation. (The official repo has not been released.)
