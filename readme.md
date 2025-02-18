@@ -1,12 +1,3 @@
-git filter-branch --commit-filter '
-  	if [ "$GIT_AUTHOR_NAME" = "rlawldud53" ];
-        then
-          	GIT_AUTHOR_NAME="big_oh_one";
-   		    GIT_AUTHOR_EMAIL="owj0421@naver.com";
-      	git commit-tree "$@";
-	else
-      	git commit-tree "$@";
-	  	fi' HEAD
 # Outfit Transformer: Outfit Representations for Fashion Recommendation
 
 ## Introduction
