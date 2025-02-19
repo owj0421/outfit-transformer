@@ -165,7 +165,7 @@ class CLIPTextEncoder(BaseTextEncoder):
     
     def __init__(
         self,
-        model_name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2",
+        model_name_or_path: str = 'patrickjohncyh/fashion-clip',
         freeze: bool = True
     ):
         super().__init__()
@@ -192,7 +192,7 @@ class CLIPTextEncoder(BaseTextEncoder):
         texts: List[str] = sum(texts, []) # 
         
         tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
-            'max_length': 16,
+            'max_length': 64,
             'padding': 'max_length',
             'truncation': True,
         }

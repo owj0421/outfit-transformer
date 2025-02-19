@@ -15,8 +15,6 @@ from ..utils.model_utils import get_device
 # Constants
 PAD_IMAGE = Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
 PAD_TEXT = ''
-PAD_IMAGE_EMBEDDING = torch.zeros(512)
-PAD_TEXT_EMBEDDING = torch.zeros(512)
 
 QUERY_IMG_PATH = pathlib.Path(__file__).parent.absolute() / 'question.jpg'
 
@@ -24,6 +22,7 @@ QUERY_IMG_PATH = pathlib.Path(__file__).parent.absolute() / 'question.jpg'
 @dataclass
 class OutfitTransformerConfig:
     padding: Literal['longest', 'max_length'] = 'longest'
+    max_length: int = 16
     truncation: bool = True
     
     enc_text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -31,9 +30,9 @@ class OutfitTransformerConfig:
     enc_norm_out: bool = True
     aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'
     
-    transformer_n_head: int = 16
+    transformer_n_head: int = 12
     transformer_d_ffn: int = 2024
-    transformer_n_layers: int = 6
+    transformer_n_layers: int = 4
     transformer_dropout: float = 0.3
     transformer_norm_out: bool = False
     
@@ -101,10 +100,9 @@ class OutfitTransformer(nn.Module):
         """Pads images, texts, and masks to the specified length."""
         images, texts, mask = [], [], []
         
-        max_length = (
-            max([len(outfit) for outfit in outfits]) if self.cfg.padding == 'longest'
-            else min(max_length, max([len(outfit) for outfit in outfits]))
-        )
+        max_length = max([len(outfit) for outfit in outfits]) 
+        max_length = max_length if self.cfg.padding == 'longest' else min(self.cfg.max_length, max_length)
+        
         for outfit in outfits:
             if self.cfg.truncation:
                 outfit = outfit[:max_length]
@@ -112,7 +110,7 @@ class OutfitTransformer(nn.Module):
                 [item.image for item in outfit] + [PAD_IMAGE] * (max_length - len(outfit))
             )
             texts.append(
-                [f"Category: {item.category}; Description: {item.description}" for item in outfit] + [PAD_TEXT] * (max_length - len(outfit))
+                [f"A {item.category} featuring {item.description}" for item in outfit] + [PAD_TEXT] * (max_length - len(outfit))
             )
             mask.append(
                 [0] * len(outfit) + [1] * (max_length - len(outfit))
