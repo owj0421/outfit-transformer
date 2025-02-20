@@ -85,6 +85,7 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         self,
         embedding_size: int = 64,
         model_name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2",
+        normalize: bool = True,
         freeze: bool = True
     ):
         """
@@ -107,6 +108,7 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
             in_features=self.model.config.hidden_size, 
             out_features=embedding_size
         )
+        self.normalize = normalize
         
     def encode(
         self, 
@@ -139,24 +141,21 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         inputs = self.tokenizer(
             texts, **self.tokenizer_args
         )
-        
         inputs = {
-            key: value.to(self.device) 
-            for key, value in inputs.items()
+            key: value.to(self.device) for key, value in inputs.items()
         }
-        
         outputs = mean_pooling(
             model_output=self.model(**inputs), 
             attention_mask=inputs['attention_mask']
         )
-        
         text_embeddings = self.proj(
             outputs
         )
-        
         text_embeddings = text_embeddings.view(
             batch_size, -1, self.embedding_size
         )
+        if self.normalize:
+            text_embeddings = F.normalize(text_embeddings, p=2, dim=-1)
 
         return text_embeddings
     
@@ -166,19 +165,21 @@ class CLIPTextEncoder(BaseTextEncoder):
     def __init__(
         self,
         model_name_or_path: str = 'patrickjohncyh/fashion-clip',
+        normalize: bool = True,
         freeze: bool = True
     ):
         super().__init__()
-        self.embedding_size = 512
+        # self.embedding_size = 512
         self.model = CLIPTextModelWithProjection.from_pretrained(
             model_name_or_path
         )
         if freeze:
             freeze_model(self.model)
-        self.projection_dim = self.model.config.projection_dim
+        self.embedding_size = self.model.config.projection_dim
         self.tokenizer = CLIPTokenizer.from_pretrained(
            model_name_or_path
         )
+        self.normalize = normalize
         
     def encode(
         self, 
@@ -201,18 +202,16 @@ class CLIPTextEncoder(BaseTextEncoder):
         inputs = self.tokenizer(
             text=texts, **tokenizer_kargs
         )
-        
         inputs = {
-            key: value.to(self.device) 
-            for key, value in inputs.items()
+            key: value.to(self.device) for key, value in inputs.items()
         }
-        
         text_embeddings = self.model(
             **inputs
         ).text_embeds
-        
         text_embeddings = text_embeddings.view(
             batch_size, -1, self.embedding_size
-        )    
+        )
+        if self.normalize:
+            text_embeddings = F.normalize(text_embeddings, p=2, dim=-1)
             
         return text_embeddings

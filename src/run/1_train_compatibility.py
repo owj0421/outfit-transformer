@@ -71,11 +71,11 @@ def parse_args():
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
-                        default=20)
+                        default=32)
     parser.add_argument('--lr', type=float,
-                        default=4e-5)
+                        default=1e-4)
     parser.add_argument('--accumulation_steps', type=int,
-                        default=2)
+                        default=4)
     parser.add_argument('--wandb_key', type=str, 
                         default=None)
     parser.add_argument('--seed', type=int, 
@@ -103,7 +103,7 @@ def setup_dataloaders(rank, world_size, args):
 
     # Distributed sampler for training
     train_sampler = DistributedSampler(train, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True)
-    valid_sampler = DistributedSampler(valid, num_replicas=world_size, rank=rank, shuffle=False)
+    valid_sampler = DistributedSampler(valid, num_replicas=world_size, rank=rank, shuffle=False, drop_last=True)
 
     train_dataloader = DataLoader(
         dataset=train,

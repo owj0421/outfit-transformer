@@ -88,6 +88,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         embedding_size: int = 64,
         size: int = 224,
         crop_size: int = 224,
+        normalize: bool = True,
         freeze: bool = False
     ):
         """
@@ -118,6 +119,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
+        self.normalize = normalize
     
     def encode(
         self, 
@@ -142,14 +144,14 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         transformed_images = torch.stack(
             [self.transform(image.convert('RGB')) for image in images]
         ).to(self.device)
-        
         image_embeddings = self.model(
             transformed_images
         )
-        
         image_embeddings = image_embeddings.view(
             batch_size, -1, self.embedding_size
         )
+        if self.normalize:
+            image_embeddings = F.normalize(image_embeddings, p=2, dim=-1)
         
         return image_embeddings
     
@@ -159,19 +161,21 @@ class CLIPImageEncoder(BaseImageEncoder):
     def __init__(
         self, 
         model_name_or_path: str = 'patrickjohncyh/fashion-clip',
+        normalize: bool = True,
         freeze: bool = True
     ):
         super().__init__()
-        self.embedding_size = 512
+        # self.embedding_size = 512
         self.model = CLIPVisionModelWithProjection.from_pretrained(
             model_name_or_path
         )
         if freeze:
             freeze_model(self.model)
-        self.projection_dim = self.model.config.projection_dim
+        self.embedding_size = self.model.config.projection_dim
         self.processor = CLIPImageProcessor.from_pretrained(
             model_name_or_path
         )
+        self.normalize = normalize
     
     
     def encode(
@@ -191,13 +195,13 @@ class CLIPImageEncoder(BaseImageEncoder):
         transformed_images = self.processor(
             images=images, **processor_kargs
         ).to(self.device)
-        
         image_embeddings = self.model(
             **transformed_images
         ).image_embeds
-        
         image_embeddings = image_embeddings.view(
             batch_size, -1, self.embedding_size
         )
+        if self.normalize:
+            image_embeddings = F.normalize(image_embeddings, p=2, dim=-1)
 
         return image_embeddings

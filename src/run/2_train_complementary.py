@@ -73,9 +73,9 @@ def parse_args():
     parser.add_argument('--n_epochs', type=int,
                         default=20)
     parser.add_argument('--lr', type=float,
-                        default=4e-5)
+                        default=1e-4)
     parser.add_argument('--accumulation_steps', type=int,
-                        default=2)
+                        default=4)
     parser.add_argument('--wandb_key', type=str, 
                         default=None)
     parser.add_argument('--seed', type=int, 

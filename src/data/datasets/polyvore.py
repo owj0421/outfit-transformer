@@ -59,7 +59,7 @@ def load_item(dataset_dir, metadata, item_id):
         item_id=item['item_id'],
         category=item['semantic_category'],
         image=image,
-        description=item['url_name'],
+        description=item['title'] if item['title'] else item['url_name'],
         metadata=item
     )
     
