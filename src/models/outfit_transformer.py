@@ -70,7 +70,7 @@ class OutfitTransformer(nn.Module):
     
     def _build_transformer_enc(self) -> nn.TransformerEncoder:
         """Builds the transformer encoder using configuration parameters."""
-        encoder_layer = nn.TransformerEncoderLayer(
+        transformer_enc_layer = nn.TransformerEncoderLayer(
             d_model=self.enc.d_out,
             nhead=self.cfg.transformer_n_head,
             dim_feedforward=self.cfg.transformer_d_ffn,
@@ -79,7 +79,10 @@ class OutfitTransformer(nn.Module):
             norm_first=True,
             activation=F.mish,
         )
-        self.transformer_enc = nn.TransformerEncoder(encoder_layer=encoder_layer, num_layers=self.cfg.transformer_n_layers)
+        self.transformer_enc = nn.TransformerEncoder(
+            encoder_layer=transformer_enc_layer, 
+            num_layers=self.cfg.transformer_n_layers
+        )
     
     def _build_calc_cp_ffn(self) -> nn.Sequential:
         """Builds the feed-forward classifier layer."""
