@@ -33,12 +33,10 @@ class OutfitTransformerEncoder(nn.Module):
     def _build_encoders(self, model_name):
         self.image_enc = Resnet18ImageEncoder(
             embedding_size=self.enc_dim_per_modality,
-            normalize=self.enc_norm_out
         )
         self.text_enc = HuggingFaceTextEncoder(
             embedding_size=self.enc_dim_per_modality,
-            model_name_or_path=model_name,
-            normalize=self.enc_norm_out
+            model_name_or_path=model_name
         )
         
     @property
@@ -52,10 +50,10 @@ class OutfitTransformerEncoder(nn.Module):
     def forward(self, images, texts, *args, **kwargs):
         # Encode images and texts
         image_embeddings = self.image_enc(
-            images, *args, **kwargs
+            images, normalize=self.enc_norm_out, *args, **kwargs
         )
         text_embeddings = self.text_enc(
-            texts, *args, **kwargs
+            texts, normalize=self.enc_norm_out, *args, **kwargs
         )
         # Aggregate embeddings
         encoder_outputs = aggregate_embeddings(
@@ -83,10 +81,8 @@ class OutfitCLIPTransformerEncoder(OutfitTransformerEncoder):
     
     def _build_encoders(self, model_name):
         self.image_enc = CLIPImageEncoder(
-            model_name_or_path=model_name,
-            normalize=self.enc_norm_out
+            model_name_or_path=model_name
         )
         self.text_enc = CLIPTextEncoder(
-            model_name_or_path=model_name,
-            normalize=self.enc_norm_out
+            model_name_or_path=model_name
         )

@@ -44,7 +44,7 @@ class BaseTextEncoder(nn.Module, ABC):
         return next(self.parameters()).device
 
     @abstractmethod
-    def encode(
+    def _forward(
         self, 
         texts: List[List[str]]
     ) -> torch.Tensor:
@@ -63,6 +63,7 @@ class BaseTextEncoder(nn.Module, ABC):
     def forward(
         self, 
         texts: List[List[str]], 
+        normalize: bool = True,
         *args, **kwargs
     ) -> torch.Tensor:
         """
@@ -76,7 +77,15 @@ class BaseTextEncoder(nn.Module, ABC):
         Returns:
             torch.Tensor: Output of the embed method.
         """
-        return self.encode(texts, *args, **kwargs)
+        if len(set(len(text_seq) for text_seq in texts)) > 1:
+            raise ValueError('All sequences in texts should have the same length.')
+        
+        text_embeddings = self._forward(texts, *args, **kwargs)
+        
+        if normalize:
+            text_embeddings = F.normalize(text_embeddings, p=2, dim=-1)
+            
+        return text_embeddings
         
         
 class HuggingFaceTextEncoder(BaseTextEncoder):
@@ -85,7 +94,6 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         self,
         embedding_size: int = 64,
         model_name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2",
-        normalize: bool = True,
         freeze: bool = True
     ):
         """
@@ -108,9 +116,8 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
             in_features=self.model.config.hidden_size, 
             out_features=embedding_size
         )
-        self.normalize = normalize
         
-    def encode(
+    def _forward(
         self, 
         texts: List[List[str]],
         tokenizer_kargs: Dict[str, Any] = None
@@ -124,9 +131,6 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         Returns:
             torch.Tensor: A tensor of shape (batch_size, longest_sequence_length, embedding_size).
         """
-        if len(set(len(text_seq) for text_seq in texts)) > 1:
-            raise ValueError('All sequences in texts should have the same length.')
-
         batch_size = len(texts)
         texts = sum(texts, [])
 
@@ -154,8 +158,6 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         text_embeddings = text_embeddings.view(
             batch_size, -1, self.embedding_size
         )
-        if self.normalize:
-            text_embeddings = F.normalize(text_embeddings, p=2, dim=-1)
 
         return text_embeddings
     
@@ -165,7 +167,6 @@ class CLIPTextEncoder(BaseTextEncoder):
     def __init__(
         self,
         model_name_or_path: str = 'patrickjohncyh/fashion-clip',
-        normalize: bool = True,
         freeze: bool = True
     ):
         super().__init__()
@@ -179,16 +180,12 @@ class CLIPTextEncoder(BaseTextEncoder):
         self.tokenizer = CLIPTokenizer.from_pretrained(
            model_name_or_path
         )
-        self.normalize = normalize
         
-    def encode(
+    def _forward(
         self, 
         texts: List[List[str]],
         tokenizer_kargs: Dict[str, Any] = None
     ) -> Tensor:
-        if len(set(len(text_seq) for text_seq in texts)) > 1:
-            raise ValueError('All sequences in texts should have the same length.')
-
         batch_size = len(texts)
         texts: List[str] = sum(texts, []) # 
         
@@ -211,7 +208,5 @@ class CLIPTextEncoder(BaseTextEncoder):
         text_embeddings = text_embeddings.view(
             batch_size, -1, self.embedding_size
         )
-        if self.normalize:
-            text_embeddings = F.normalize(text_embeddings, p=2, dim=-1)
             
         return text_embeddings

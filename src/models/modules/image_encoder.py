@@ -46,7 +46,7 @@ class BaseImageEncoder(nn.Module, ABC):
         return next(self.parameters()).device
 
     @abstractmethod
-    def encode(
+    def _forward(
         self, 
         images: List[List[Image.Image]]
     ) -> torch.Tensor:
@@ -65,6 +65,7 @@ class BaseImageEncoder(nn.Module, ABC):
     def forward(
         self, 
         images: List[List[Image.Image]], 
+        normalize: bool = True,
         *args, **kwargs
     ) -> torch.Tensor:
         """
@@ -78,7 +79,15 @@ class BaseImageEncoder(nn.Module, ABC):
         Returns:
             torch.Tensor: Output of the embed method.
         """
-        return self.encode(images, *args, **kwargs)
+        if len(set(len(image_seq) for image_seq in images)) > 1:
+            raise ValueError('All sequences in images should have the same length.')
+        
+        image_embeddings = self._forward(images, *args, **kwargs)
+        
+        if normalize:
+            image_embeddings = F.normalize(image_embeddings, p=2, dim=-1)
+            
+        return image_embeddings
     
 
 class Resnet18ImageEncoder(BaseImageEncoder):
@@ -88,7 +97,6 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         embedding_size: int = 64,
         size: int = 224,
         crop_size: int = 224,
-        normalize: bool = True,
         freeze: bool = False
     ):
         """
@@ -119,9 +127,8 @@ class Resnet18ImageEncoder(BaseImageEncoder):
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
-        self.normalize = normalize
     
-    def encode(
+    def _forward(
         self, 
         images: List[List[Image.Image]]
     ):  
@@ -134,10 +141,6 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         Returns:
             torch.Tensor: Tensor of shape (batch_size, longest_sequence_length, embedding_size).
         """
-        # Ensure all image sequences have the same length
-        if len(set(len(image_seq) for image_seq in images)) > 1:
-            raise ValueError('All sequences in images should have the same length.')
-
         batch_size = len(images)
         images = sum(images, [])
         
@@ -150,8 +153,6 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         image_embeddings = image_embeddings.view(
             batch_size, -1, self.embedding_size
         )
-        if self.normalize:
-            image_embeddings = F.normalize(image_embeddings, p=2, dim=-1)
         
         return image_embeddings
     
@@ -161,7 +162,6 @@ class CLIPImageEncoder(BaseImageEncoder):
     def __init__(
         self, 
         model_name_or_path: str = 'patrickjohncyh/fashion-clip',
-        normalize: bool = True,
         freeze: bool = True
     ):
         super().__init__()
@@ -175,17 +175,13 @@ class CLIPImageEncoder(BaseImageEncoder):
         self.processor = CLIPImageProcessor.from_pretrained(
             model_name_or_path
         )
-        self.normalize = normalize
     
     
-    def encode(
+    def _forward(
        self, 
        images: List[List[Image.Image]],
        processor_kargs: Dict[str, Any] = None
     ):  
-        if len(set(len(image_seq) for image_seq in images)) > 1:
-            raise ValueError('All sequences in images should have the same length.')
-
         batch_size = len(images)
         images = sum(images, [])
         
@@ -201,7 +197,5 @@ class CLIPImageEncoder(BaseImageEncoder):
         image_embeddings = image_embeddings.view(
             batch_size, -1, self.embedding_size
         )
-        if self.normalize:
-            image_embeddings = F.normalize(image_embeddings, p=2, dim=-1)
 
         return image_embeddings
