@@ -59,7 +59,7 @@ def parse_args():
     parser.add_argument('--n_epochs', type=int,
                         default=32)
     parser.add_argument('--lr', type=float,
-                        default=1e-4)
+                        default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
                         default=4)
     parser.add_argument('--wandb_key', type=str, 
@@ -78,18 +78,23 @@ def parse_args():
 
 
 def setup_dataloaders(rank, world_size, args):
+    metadata = polyvore.load_metadata(args.polyvore_dir)
+    all_embeddings_dict = polyvore.load_all_embeddings_dict(args.polyvore_dir)
+    
     train = polyvore.PolyvoreCompatibilityDataset(
-        dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, dataset_split='train'
+        dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, 
+        dataset_split='train', metadata=metadata, all_embeddings_dict=all_embeddings_dict
     )
     valid = polyvore.PolyvoreCompatibilityDataset(
-        dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, dataset_split='valid'
+        dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, 
+        dataset_split='valid', metadata=metadata, all_embeddings_dict=all_embeddings_dict
     )
 
     train_sampler = DistributedSampler(
         train, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
     )
     valid_sampler = DistributedSampler(
-        valid, num_replicas=world_size, rank=rank, shuffle=False, drop_last=True
+        valid, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
     )
 
     train_dataloader = DataLoader(
@@ -117,17 +122,17 @@ def train_step(
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
-        
         queries = data['query']
         labels_ = torch.tensor(data['label'], dtype=torch.float32, device=rank)
         
-        predictions_ = model(queries).squeeze(1)
+        predictions_ = model(queries, use_precomputed_embedding=True).squeeze(1)
         
         loss = loss_fn(y_true=labels_, y_prob=predictions_) / args.accumulation_steps
         loss.backward()
         if (i + 1) % args.accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
+        if scheduler:
             scheduler.step()
         
         total_loss += loss.item() * args.accumulation_steps
@@ -189,7 +194,7 @@ def valid_step(
         queries = data['query']
         labels_ = torch.tensor(data['label'], dtype=torch.float32, device=rank)
     
-        predictions_ = model(queries).squeeze(1)
+        predictions_ = model(queries, use_precomputed_embedding=True).squeeze(1)
         
         loss = loss_fn(y_true=labels_, y_prob=predictions_) / args.accumulation_steps
         
@@ -256,13 +261,13 @@ def train(
     
     # Model setting
     model = load_model(model_type=args.model_type, checkpoint=args.checkpoint).to(rank)
-    if world_size > 1:
-        ddp_model = DDP(model, device_ids=[rank], find_unused_parameters=True)
+    ddp_model = DDP(model, device_ids=[rank], find_unused_parameters=True)
     logger.info(f'Model Loaded and Wrapped with DDP')
     
     # Optimizer, Scheduler, Loss Function
     optimizer = torch.optim.AdamW(ddp_model.parameters(), lr=args.lr)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+    scheduler = None
+    torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=args.lr, epochs=args.n_epochs, steps_per_epoch=len(train_dataloader),
         pct_start=0.3, anneal_strategy='cos', div_factor=25, final_div_factor=1e4

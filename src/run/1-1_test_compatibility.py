@@ -75,7 +75,7 @@ def validation(args):
             if args.demo and i > 2:
                 break
             labels_ = torch.tensor(data['label'], dtype=torch.float32, device='cuda')
-            predictions_ = model.calculate_compatibility_score(query=data['query']).squeeze(1)
+            predictions_ = model.calculate_compatibility_score(query=data['query'], use_precomputed_embedding=True).squeeze(1)
             
             predictions.append(predictions_.detach().cpu().numpy())
             labels.append(labels_.detach().cpu().numpy())

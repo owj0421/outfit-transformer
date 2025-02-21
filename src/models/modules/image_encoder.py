@@ -23,7 +23,7 @@ from typing import Dict, Any, Optional
 
 from ...utils.model_utils import freeze_model, mean_pooling
 
-
+import numpy as np
 class BaseImageEncoder(nn.Module, ABC):
     
     def __init__(self):
@@ -48,23 +48,13 @@ class BaseImageEncoder(nn.Module, ABC):
     @abstractmethod
     def _forward(
         self, 
-        images: List[List[Image.Image]]
+        images: List[List[np.ndarray]]
     ) -> torch.Tensor:
-        """
-        Abstract method for embedding a list of images into a tensor.
-
-        Args:
-            images (List[List[Image.Image]]): A batch of images, each represented 
-                as a list of PIL Images.
-
-        Returns:
-            torch.Tensor: A tensor of shape (batch_size, longest_outfit_length, embedding_size).
-        """
         raise NotImplementedError('The embed method must be implemented by subclasses.')
 
     def forward(
         self, 
-        images: List[List[Image.Image]], 
+        images: List[List[np.ndarray]], 
         normalize: bool = True,
         *args, **kwargs
     ) -> torch.Tensor:
@@ -72,7 +62,7 @@ class BaseImageEncoder(nn.Module, ABC):
         Forward pass that calls the embed method.
 
         Args:
-            images (List[List[Image.Image]]): A batch of images, each represented 
+            images (List[List[np.ndarray]]): A batch of images, each represented 
                 as a list of PIL Images.
             *args, **kwargs: Additional arguments to be passed to the embed method.
 
@@ -130,7 +120,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
     
     def _forward(
         self, 
-        images: List[List[Image.Image]]
+        images: List[List[np.ndarray]]
     ):  
         """
         Embeds a batch of images into a tensor using ResNet-18.
@@ -145,7 +135,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         images = sum(images, [])
         
         transformed_images = torch.stack(
-            [self.transform(image.convert('RGB')) for image in images]
+            [self.transform(image) for image in images]
         ).to(self.device)
         image_embeddings = self.model(
             transformed_images
@@ -179,7 +169,7 @@ class CLIPImageEncoder(BaseImageEncoder):
     
     def _forward(
        self, 
-       images: List[List[Image.Image]],
+       images: List[List[np.ndarray]],
        processor_kargs: Dict[str, Any] = None
     ):  
         batch_size = len(images)

@@ -2,11 +2,14 @@ from typing import List, Optional, TypedDict, Union
 from PIL import Image
 import copy
 from pydantic import BaseModel, Field
+import numpy as np
 
 
-def default_image() -> Image.Image:
+def default_image() -> np.ndarray:
     """Returns a default blank image."""
-    return Image.new("RGB", (224, 224))
+    # return Image.new("RGB", (224, 224))
+    return np.zeros((224, 224, 3), dtype=np.uint8)
+
 
 
 class FashionItem(BaseModel):
@@ -18,7 +21,7 @@ class FashionItem(BaseModel):
         default="",
         description="Category of the item"
     )
-    image: Optional[Image.Image] = Field(
+    image: Optional[np.ndarray] = Field(
         default_factory=default_image,
         description="Image of the item"
     )
@@ -30,6 +33,10 @@ class FashionItem(BaseModel):
         default_factory=dict,
         description="Additional metadata for the item"
     )
+    embedding: Optional[np.ndarray] = Field(
+        default=None,
+        description="Embedding of the item"
+    )
 
     class Config:
         arbitrary_types_allowed = True
@@ -40,7 +47,6 @@ class FashionCompatibilityQuery(BaseModel):
         default_factory=list,
         description="List of fashion items"
     )
-    
 
 class FashionComplementaryQuery(BaseModel):
     outfit: List[FashionItem] = Field(

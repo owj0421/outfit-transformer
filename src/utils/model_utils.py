@@ -4,7 +4,6 @@ import torch
 
 
 def get_device(model: torch.nn.Module) -> torch.device:
-    """Gets the device on which the model's parameters are stored."""
     return next(model.parameters()).device
 
 
@@ -18,17 +17,6 @@ def aggregate_embeddings(
     text_embeddings: Optional[Tensor] = None, 
     aggregation_method: str = 'concat'
 ) -> Tensor:
-    """
-    Aggregates image and text embeddings using the specified method.
-
-    Args:
-        image_embeds (Optional[Tensor]): Tensor containing image embeddings, shape (..., D).
-        text_embeds (Optional[Tensor]): Tensor containing text embeddings, shape (..., D).
-        aggregation_method (str): Method to aggregate embeddings ('concat' or 'mean').
-
-    Returns:
-        Tensor: Aggregated embeddings.
-    """
     embeds = []
     if image_embeddings is not None:
         embeds.append(image_embeddings)
@@ -50,16 +38,6 @@ def mean_pooling(
     model_output: Tensor, 
     attention_mask: Tensor
 ) -> Tensor:
-    """
-    Applies mean pooling on token embeddings, weighted by the attention mask.
-
-    Args:
-        model_output (Tensor): Output tensor from the transformer model, shape (batch_size, seq_length, hidden_size).
-        attention_mask (Tensor): Attention mask tensor, shape (batch_size, seq_length).
-
-    Returns:
-        Tensor: Mean-pooled embeddings, shape (batch_size, hidden_size).
-    """
     token_embeddings = model_output[0]  # First element of model_output contains the hidden states
     input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
 

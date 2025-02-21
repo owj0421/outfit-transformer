@@ -78,11 +78,11 @@ def validation(args):
             batched_cs = data['answers']
         
             batched_q_emb = model.embed_complementary_query(
-                query=batched_q
+                query=batched_q, use_precomputed_embedding=True
             ) # List(batch_sz) of Tensor(embed_sz)
 
             batched_c_embs = model.embed_complementary_item(
-                item=sum(batched_cs, [])
+                item=sum(batched_cs, []), use_precomputed_embedding=True
             ) # List(batch_sz * 4) of Tensor(embed_sz)
             batched_c_embs = torch.stack(batched_c_embs).view(args.batch_sz_per_gpu, 4, -1) # (batch_sz, 4, embed_sz)
             
