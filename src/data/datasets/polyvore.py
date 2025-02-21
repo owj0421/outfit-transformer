@@ -127,19 +127,6 @@ class PolyvoreCompatibilityDataset(Dataset):
             label=label,
             query=query
         )
-    
-    def collate_fn(self, batch) -> FashionCompatibilityData:
-        label = [item['label'] for item in batch]
-        query = [item['query'] for item in batch]
-        
-        return FashionCompatibilityData(
-            label=label,
-            query=query
-        )
-
-
-
-    
         
 class PolyvoreFillInTheBlankDataset(Dataset):
 
@@ -182,17 +169,6 @@ class PolyvoreFillInTheBlankDataset(Dataset):
             answers=answers
         )
     
-    def collate_fn(self, batch) -> FashionFillInTheBlankData:
-        query = [item['query'] for item in batch]
-        label = [item['label'] for item in batch]
-        answers = [item['answers'] for item in batch]
-        
-        return FashionFillInTheBlankData(
-            query=query,
-            label=label,
-            answers=answers
-        )
-    
         
 class PolyvoreTripletDataset(Dataset):
 
@@ -226,15 +202,6 @@ class PolyvoreTripletDataset(Dataset):
             outfit=outfit,
             category=answer.category
         )
-        return FashionTripletData(
-            query=query,
-            answer=answer
-        )
-    
-    def collate_fn(self, batch) -> FashionTripletData:
-        query = [item['query'] for item in batch]
-        answer = [item['answer'] for item in batch]
-        
         return FashionTripletData(
             query=query,
             answer=answer

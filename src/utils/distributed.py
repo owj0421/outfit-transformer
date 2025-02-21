@@ -22,7 +22,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 #    world_size=world_size)
 # TcpStore의 경우 리눅스와 동일한 방식입니다.
 
-def setup(rank, world_size):
+def setup(
+    rank: int, world_size: int
+):
+    os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
 

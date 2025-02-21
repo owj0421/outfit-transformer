@@ -170,7 +170,6 @@ class CLIPTextEncoder(BaseTextEncoder):
         freeze: bool = True
     ):
         super().__init__()
-        # self.embedding_size = 512
         self.model = CLIPTextModelWithProjection.from_pretrained(
             model_name_or_path
         )
@@ -187,7 +186,7 @@ class CLIPTextEncoder(BaseTextEncoder):
         tokenizer_kargs: Dict[str, Any] = None
     ) -> Tensor:
         batch_size = len(texts)
-        texts: List[str] = sum(texts, []) # 
+        texts: List[str] = sum(texts, [])
         
         tokenizer_kargs = tokenizer_kargs if tokenizer_kargs is not None else {
             'max_length': 64,

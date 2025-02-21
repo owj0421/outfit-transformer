@@ -8,7 +8,9 @@ import torch
 import torch.nn.functional as F
 import os
 import pathlib
-from ..data import datatypes
+from ..data.datatypes import (
+    FashionCompatibilityQuery, FashionComplementaryQuery, FashionItem
+)
 from .modules.encoder import OutfitTransformerEncoder
 from ..utils.model_utils import get_device
 
@@ -48,9 +50,8 @@ class OutfitTransformer(nn.Module):
     ):
         super().__init__()
         self.cfg = cfg
-        # Encoders
+        # Outfit Encoder
         self._build_enc()
-        # Transformer Encoder
         self._build_transformer_enc()
         # Classifier and Embedding Layers
         self._build_calc_cp_ffn()
@@ -126,9 +127,27 @@ class OutfitTransformer(nn.Module):
         """Returns the device on which the model's parameters are stored."""
         return get_device(self)
     
+    def forward(
+        self, 
+        inputs: Union[
+            List[FashionCompatibilityQuery], 
+            List[FashionComplementaryQuery],
+            List[FashionItem],
+        ], 
+        *args, **kwargs
+    ) -> Tensor:
+        if isinstance(inputs[0], FashionCompatibilityQuery):
+            return self.calculate_compatibility_score(inputs, *args, **kwargs)
+        elif isinstance(inputs[0], FashionComplementaryQuery):
+            return self.embed_complementary_query(inputs, *args, **kwargs)
+        elif isinstance(inputs[0], FashionItem):
+            return self.embed_complementary_item(inputs, *args, **kwargs)
+        else:
+            raise ValueError("Invalid input type.")
+    
     def calculate_compatibility_score(
         self, 
-        query: List[datatypes.FashionCompatibilityQuery], 
+        query: List[FashionCompatibilityQuery], 
         *args, **kwargs
     ) -> Tensor:
         """
@@ -153,13 +172,13 @@ class OutfitTransformer(nn.Module):
     
     def embed_complementary_query(
         self, 
-        query: List[datatypes.FashionComplementaryQuery], 
+        query: List[FashionComplementaryQuery], 
         *args, **kwargs
     ) -> List[Tensor]:
         """
         Embeds query items for compatibility.
         """
-        query_items = [datatypes.FashionItem(category=i.category, image=self.query_img, description=i.category) for i in query]
+        query_items = [FashionItem(category=i.category, image=self.query_img, description=i.category) for i in query]
         outfits = [[query_item] + i.outfit for query_item, i in zip(query_items, query)]
         
         images, texts, mask = self._pad_and_mask(outfits)
@@ -175,7 +194,7 @@ class OutfitTransformer(nn.Module):
 
     def embed_complementary_item(
         self, 
-        item: List[datatypes.FashionItem], 
+        item: List[FashionItem], 
         *args, **kwargs
     ) -> List[Tensor]:
         """
