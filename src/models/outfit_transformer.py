@@ -35,9 +35,9 @@ class OutfitTransformerConfig:
     aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'
     
     init_transformer: bool = True
-    transformer_n_head: int = 8
+    transformer_n_head: int = 16
     transformer_d_ffn: int = 2024
-    transformer_n_layers: int = 4
+    transformer_n_layers: int = 6
     transformer_dropout: float = 0.3
     transformer_norm_out: bool = False
     

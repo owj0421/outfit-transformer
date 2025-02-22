@@ -15,14 +15,19 @@ def load_model(model_type, checkpoint, **cfg_kwargs):
         state_dict = torch.load(checkpoint)
         
     if model_type == 'original':
-        cfg = OutfitTransformerConfig(**state_dict['cfg']) if checkpoint else OutfitTransformerConfig(**cfg_kwargs)
-        model = OutfitTransformer(cfg).cuda()
+        cfg = OutfitTransformerConfig(**state_dict['config']) if checkpoint else OutfitTransformerConfig(**cfg_kwargs)
+        model = OutfitTransformer(cfg)
 
     elif model_type == 'clip':
-        cfg = OutfitCLIPTransformerConfig(**state_dict['cfg']) if checkpoint else OutfitCLIPTransformerConfig(**cfg_kwargs)
-        model = OutfitCLIPTransformer(cfg).cuda()
+        cfg = OutfitCLIPTransformerConfig(**state_dict['config']) if checkpoint else OutfitCLIPTransformerConfig(**cfg_kwargs)
+        model = OutfitCLIPTransformer(cfg)
         
     if checkpoint:
+        new_state_dict = {}
+        for key, value in state_dict.items():
+            new_key = key.replace("module.", "")  # "module." 부분 제거
+            new_state_dict[new_key] = value
+        
         model.load_state_dict(
             state_dict['model'], strict=False
         )
