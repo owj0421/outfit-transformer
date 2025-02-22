@@ -10,6 +10,7 @@ from ..models.load import load_model
 from ..utils.loss import focal_loss
 from ..utils.utils import seed_everything
 from ..data.datasets import polyvore
+from ..data import collate_fn
 from ..evaluation.metrics import compute_cp_scores
 import pathlib
 
@@ -48,23 +49,19 @@ def parse_args():
 
 
 def validation(args):
+    metadata = polyvore.load_metadata(args.polyvore_dir)
+    all_embeddings_dict = polyvore.load_all_embeddings_dict(args.polyvore_dir)
+    
     test = polyvore.PolyvoreCompatibilityDataset(
-        dataset_dir=args.polyvore_dir,
-        dataset_type=args.polyvore_type,
-        dataset_split='test'
+        dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, 
+        dataset_split='test', metadata=metadata, all_embeddings_dict=all_embeddings_dict
     )
     test_dataloader = DataLoader(
-        dataset=test,
-        batch_size=args.batch_sz_per_gpu,
-        shuffle=False,
-        num_workers=args.n_workers_per_gpu,
-        collate_fn=test.collate_fn
+        dataset=test, batch_size=args.batch_sz_per_gpu, shuffle=False,
+        num_workers=args.n_workers_per_gpu, collate_fn=collate_fn.cp_collate_fn
     )
     
-    model = load_model(
-        model_type=args.model_type,
-        checkpoint=args.checkpoint
-    ) 
+    model = load_model(model_type=args.model_type, checkpoint=args.checkpoint) 
     model = model.cuda()
     model.eval()
     
@@ -75,7 +72,7 @@ def validation(args):
             if args.demo and i > 2:
                 break
             labels_ = torch.tensor(data['label'], dtype=torch.float32, device='cuda')
-            predictions_ = model.calculate_compatibility_score(query=data['query'], use_precomputed_embedding=True).squeeze(1)
+            predictions_ = model(data['query'], use_precomputed_embedding=True).squeeze(1)
             
             predictions.append(predictions_.detach().cpu().numpy())
             labels.append(labels_.detach().cpu().numpy())
