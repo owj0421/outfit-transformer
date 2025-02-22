@@ -27,7 +27,7 @@ from ..models.load import load_model
 from ..utils.loss import focal_loss
 from ..utils.utils import seed_everything
 from ..utils.logger import get_logger
-from ..utils.distributed import setup, cleanup
+from ..utils.distributed import setup, cleanup, gather_results
 from ..data.datasets import polyvore
 from ..data import collate_fn
 from ..evaluation.metrics import compute_cp_scores
@@ -57,7 +57,7 @@ def parse_args():
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
-                        default=200)
+                        default=128)
     parser.add_argument('--lr', type=float,
                         default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
@@ -117,17 +117,16 @@ def train_step(
     model.train()  
     pbar = tqdm(dataloader, desc=f'Train Epoch {epoch+1}/{args.n_epochs}')
     
-    predictions, labels = [], []
-    total_loss = torch.zeros(1, device=rank)  # Initialize total loss as a tensor on the current device
+    all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
         queries = data['query']
-        labels_ = torch.tensor(data['label'], dtype=torch.float32, device=rank)
+        labels = torch.tensor(data['label'], dtype=torch.float32, device=rank)
         
-        predictions_ = model(queries, use_precomputed_embedding=True).squeeze(1)
+        preds = model(queries, use_precomputed_embedding=True).squeeze(1)
         
-        loss = loss_fn(y_true=labels_, y_prob=predictions_) / args.accumulation_steps
+        loss = loss_fn(y_true=labels, y_prob=preds) / args.accumulation_steps
         loss.backward()
         if (i + 1) % args.accumulation_steps == 0:
             optimizer.step()
@@ -135,12 +134,13 @@ def train_step(
         if scheduler:
             scheduler.step()
         
-        total_loss += loss.item() * args.accumulation_steps
-        predictions.append(predictions_.detach())
-        labels.append(labels_.detach())
+        # Accumulate Results
+        all_loss += loss.item() * args.accumulation_steps / len(dataloader)
+        all_preds.append(preds.detach())
+        all_labels.append(labels.detach())
 
-        # Logging
-        score = compute_cp_scores(predictions[-1].cpu().numpy(), labels[-1].cpu().numpy())
+        # Logging 
+        score = compute_cp_scores(all_preds[-1], all_labels[-1])
         logs = {
             'loss': loss.item() * args.accumulation_steps,
             'steps': len(pbar) * epoch + i,
@@ -152,29 +152,15 @@ def train_step(
             logs = {f'train_{k}': v for k, v in logs.items()}
             wandb_run.log(logs)
     
-    predictions = torch.cat(predictions).to(rank)
-    labels = torch.cat(labels).to(rank)
 
-    gathered_predictions = [torch.empty_like(predictions) for _ in range(world_size)]
-    gathered_labels = [torch.empty_like(labels) for _ in range(world_size)]
-    dist.all_gather(gathered_predictions, predictions)
-    dist.all_gather(gathered_labels, labels)
-    dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
-    total_loss /= (len(dataloader) * world_size)
+    all_preds = torch.cat(all_preds).to(rank)
+    all_labels = torch.cat(all_labels).to(rank)
 
-    if rank == 0:
-        all_predictions = torch.cat(gathered_predictions).cpu().numpy()
-        all_labels = torch.cat(gathered_labels).cpu().numpy()
-        all_score = compute_cp_scores(all_predictions, all_labels)
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End (Score: {all_score}, Avg Loss: {total_loss.item()})')
-    else:
-        all_score = {}
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End')
+    gathered_loss, gathered_preds, gathered_labels = gather_results(all_loss, all_preds, all_labels)
+    output = {'loss': gathered_loss.item(), **compute_cp_scores(gathered_preds, gathered_labels)} if rank == 0 else {}
+    logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End {output}')
 
-    return {
-        'train_loss': total_loss.item(), 
-        **{f'train_{key}': value for key, value in all_score.items()}
-    }
+    return {f'train_{key}': value for key, value in output.items()}
    
         
 @torch.no_grad()
@@ -186,24 +172,24 @@ def valid_step(
     model.eval()
     pbar = tqdm(dataloader, desc=f'Valid Epoch {epoch+1}/{args.n_epochs}')
     
-    predictions, labels = [], []
-    total_loss = torch.zeros(1, device=rank)
+    all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
         queries = data['query']
-        labels_ = torch.tensor(data['label'], dtype=torch.float32, device=rank)
+        labels = torch.tensor(data['label'], dtype=torch.float32, device=rank)
     
-        predictions_ = model(queries, use_precomputed_embedding=True).squeeze(1)
+        preds = model(queries, use_precomputed_embedding=True).squeeze(1)
         
-        loss = loss_fn(y_true=labels_, y_prob=predictions_) / args.accumulation_steps
+        loss = loss_fn(y_true=labels, y_prob=preds) / args.accumulation_steps
         
-        total_loss += loss.item() * args.accumulation_steps
-        predictions.append(predictions_.detach())
-        labels.append(labels_.detach())
+        # Accumulate Results
+        all_loss += loss.item() * args.accumulation_steps / len(dataloader)
+        all_preds.append(preds.detach())
+        all_labels.append(labels.detach())
 
         # Logging
-        score = compute_cp_scores(predictions[-1].cpu().numpy(), labels[-1].cpu().numpy())
+        score = compute_cp_scores(all_preds[-1], all_labels[-1])
         logs = {
             'loss': loss.item() * args.accumulation_steps,
             'steps': len(pbar) * epoch + i,
@@ -215,29 +201,18 @@ def valid_step(
             wandb_run.log(logs)
         
     
-    predictions = torch.cat(predictions).to(rank)
-    labels = torch.cat(labels).to(rank)
+    all_preds = torch.cat(all_preds).to(rank)
+    all_labels = torch.cat(all_labels).to(rank)
 
-    gathered_predictions = [torch.empty_like(predictions) for _ in range(world_size)]
-    gathered_labels = [torch.empty_like(labels) for _ in range(world_size)]
-    dist.all_gather(gathered_predictions, predictions)
-    dist.all_gather(gathered_labels, labels)
-    dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
-    total_loss /= (len(dataloader) * world_size)
-
+    gathered_loss, gathered_preds, gathered_labels = gather_results(all_loss, all_preds, all_labels)
+    output = {}
     if rank == 0:
-        all_predictions = torch.cat(gathered_predictions).cpu().numpy()
-        all_labels = torch.cat(gathered_labels).cpu().numpy()
-        all_score = compute_cp_scores(all_predictions, all_labels)
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End (Score: {all_score}, Avg Loss: {total_loss.item()})')
-    else:
-        all_score = {}
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End')
+        all_score = compute_cp_scores(gathered_preds, gathered_labels)
+        output = {'loss': gathered_loss.item(), **all_score}
+        
+    logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End {output}')
 
-    return {
-        'valid_loss': total_loss.item(), 
-        **{f'valid_{key}': value for key, value in all_score.items()}
-    }
+    return {f'valid_{key}': value for key, value in output.items()}
 
 
 def train(
@@ -266,8 +241,7 @@ def train(
     
     # Optimizer, Scheduler, Loss Function
     optimizer = torch.optim.AdamW(ddp_model.parameters(), lr=args.lr)
-    scheduler = None
-    torch.optim.lr_scheduler.OneCycleLR(
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
         max_lr=args.lr, epochs=args.n_epochs, steps_per_epoch=len(train_dataloader),
         pct_start=0.3, anneal_strategy='cos', div_factor=25, final_div_factor=1e4

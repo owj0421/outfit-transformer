@@ -61,6 +61,9 @@ class OutfitTransformerEncoder(nn.Module):
             text_embeddings=text_embeddings,
             aggregation_method=self.aggregation_method
         )
+        # Normalize output
+        if self.enc_norm_out:
+            encoder_outputs = F.normalize(encoder_outputs, p=2, dim=-1)
         
         return encoder_outputs
     

@@ -5,31 +5,32 @@ from sklearn.metrics import roc_auc_score
 from typing import List
 
 
-def compute_cir_scores(predictions: np.ndarray, labels: np.ndarray):
-    accuracy = np.mean(predictions == labels)
+def compute_cir_scores(predictions: torch.Tensor, labels: torch.Tensor):
+    accuracy = torch.mean((predictions == labels).float()).item()
     return {
-        'acc': float(accuracy)
+        'acc': accuracy
     }
 
+def compute_cp_scores(predictions: torch.Tensor, labels: torch.Tensor):
+    predictions = (predictions > 0.5).int()
     
-def compute_cp_scores(predictions: np.ndarray, labels: np.ndarray):
-    predictions = (predictions > 0.5).astype(int)
+    tp = torch.sum((predictions == 1) & (labels == 1)).item()
+    fp = torch.sum((predictions == 1) & (labels == 0)).item()
+    fn = torch.sum((predictions == 0) & (labels == 1)).item()
     
-    tp = np.sum((predictions == 1) & (labels == 1))
-    fp = np.sum((predictions == 1) & (labels == 0))
-    fn = np.sum((predictions == 0) & (labels == 1))
-    
-    accuracy = np.mean(predictions == labels)
+    accuracy = torch.mean((predictions == labels).float()).item()
     precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
     
-    auc = roc_auc_score(labels, predictions) if len(np.unique(labels)) > 1 else 0.0
+    auc = roc_auc_score(labels.cpu().numpy(), predictions.cpu().numpy()) if len(torch.unique(labels)) > 1 else 0.0
+    auc = float(auc)
     
     return {
-        'acc': float(accuracy), 
-        'precision': float(precision), 
-        'recall': float(recall), 
-        'f1': float(f1),
-        'auc': float(auc)
+        'acc': accuracy, 
+        'precision': precision, 
+        'recall': recall, 
+        'f1': f1,
+        'auc': auc
     }
+

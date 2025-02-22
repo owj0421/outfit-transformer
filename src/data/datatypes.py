@@ -11,7 +11,6 @@ def default_image() -> np.ndarray:
     return np.zeros((224, 224, 3), dtype=np.uint8)
 
 
-
 class FashionItem(BaseModel):
     item_id: Optional[int] = Field(
         default=None,

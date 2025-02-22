@@ -38,3 +38,16 @@ def setup(
 
 def cleanup():
     dist.destroy_process_group()
+    
+    
+def gather_results(all_loss, all_preds, all_labels):
+    gathered_preds = [torch.empty_like(all_preds) for _ in range(dist.get_world_size())]
+    gathered_labels = [torch.empty_like(all_labels) for _ in range(dist.get_world_size())]
+    dist.all_gather(gathered_preds, all_preds)
+    dist.all_gather(gathered_labels, all_labels)
+    dist.all_reduce(all_loss, op=dist.ReduceOp.SUM)
+    all_loss /= dist.get_world_size()
+    gathered_preds = torch.cat(gathered_preds, dim=0)
+    gathered_labels = torch.cat(gathered_labels, dim=0)
+    
+    return all_loss, gathered_preds, gathered_labels

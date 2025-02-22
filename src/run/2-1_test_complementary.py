@@ -33,7 +33,7 @@ def parse_args():
     parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'],
                         default='nondisjoint')
     parser.add_argument('--batch_sz_per_gpu', type=int,
-                        default=64)
+                        default=512)
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--wandb_key', type=str, 
@@ -77,13 +77,9 @@ def validation(args):
             batched_q = data['query']
             batched_cs = data['answers']
         
-            batched_q_emb = model.embed_complementary_query(
-                query=batched_q, use_precomputed_embedding=True
-            ) # List(batch_sz) of Tensor(embed_sz)
+            batched_q_emb = model(batched_q, use_precomputed_embedding=True) # List(batch_sz) of Tensor(embed_sz)
 
-            batched_c_embs = model.embed_complementary_item(
-                item=sum(batched_cs, []), use_precomputed_embedding=True
-            ) # List(batch_sz * 4) of Tensor(embed_sz)
+            batched_c_embs = model(sum(batched_cs, []), use_precomputed_embedding=True) # List(batch_sz * 4) of Tensor(embed_sz)
             batched_c_embs = torch.stack(batched_c_embs).view(args.batch_sz_per_gpu, 4, -1) # (batch_sz, 4, embed_sz)
             
             dists = np.array([

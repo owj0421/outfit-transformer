@@ -27,7 +27,7 @@ from ..models.load import load_model
 from ..utils.loss import focal_loss
 from ..utils.utils import seed_everything
 from ..utils.logger import get_logger
-from ..utils.distributed import setup, cleanup
+from ..utils.distributed import setup, cleanup, gather_results
 from ..data.datasets import polyvore
 from ..data import collate_fn
 from ..evaluation.metrics import compute_cp_scores, compute_cir_scores
@@ -55,15 +55,15 @@ def parse_args():
     parser.add_argument('--polyvore_type', type=str, choices=['nondisjoint', 'disjoint'],
                         default='nondisjoint')
     parser.add_argument('--batch_sz_per_gpu', type=int,
-                        default=48)
+                        default=512)
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
-                        default=8)
+                        default=100)
     parser.add_argument('--lr', type=float,
                         default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
-                        default=4)
+                        default=1)
     parser.add_argument('--wandb_key', type=str, 
                         default=None)
     parser.add_argument('--seed', type=int, 
@@ -80,7 +80,8 @@ def parse_args():
 
 
 def setup_dataloaders(rank, world_size, args):    
-    global metadata, all_embeddings_dict
+    metadata = polyvore.load_metadata(args.polyvore_dir)
+    all_embeddings_dict = polyvore.load_all_embeddings_dict(args.polyvore_dir)
     
     train = polyvore.PolyvoreTripletDataset(
         dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type,
@@ -118,8 +119,7 @@ def train_step(
     model.train()
     pbar = tqdm(dataloader, desc=f'Train Epoch {epoch+1}/{args.n_epochs}')
     
-    predictions, labels = [], []
-    total_loss = torch.zeros(1, device=rank)  # Initialize total loss as a tensor on the current device
+    all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
@@ -141,28 +141,28 @@ def train_step(
                 c_embs[1:, :] # (n_candidates-1, embedding_dim)
             )
         loss = loss / (args.accumulation_steps * (b_i+1))
-        
-        dists = torch.stack([
-            torch.sum(
-                torch.norm(q_emb.detach()[None, None, :] - c_embs.detach()[None, :, :], dim=2), dim=0
-            )
-            for q_emb, c_embs in zip(batched_q_emb, batched_c_embs)
-        ])  # Shape: (batch_sz, num_candidates)
-
-        predictions_ = torch.argmin(dists, dim=1)  # Shape: (batch_sz,)
-        predictions.append(predictions_)  # Append as torch.Tensor
-        labels.append(torch.zeros(args.batch_sz_per_gpu, dtype=torch.long, device=rank))  # Directly on GPU
-        
         loss.backward()
         if (i + 1) % args.accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
+        if scheduler:
             scheduler.step()
+        
+        dists = torch.stack([
+            torch.sum(
+                torch.norm(q_emb.detach()[None, None, :] - c_embs.detach()[None, :, :], dim=2), dim=0
+            ) for q_emb, c_embs in zip(batched_q_emb, batched_c_embs)
+        ])  # Shape: (batch_sz, num_candidates)
+        preds = torch.argmin(dists, dim=1)  # Shape: (batch_sz,)
+        labels = torch.zeros(args.batch_sz_per_gpu, dtype=torch.long, device=rank)
 
-        total_loss += loss.item() * args.accumulation_steps  # Accumulate scaled loss
+        # Accumulate Results
+        all_loss += loss.item() * args.accumulation_steps / len(dataloader)
+        all_preds.append(preds.detach())
+        all_labels.append(labels.detach())
 
         # Logging
-        score = compute_cir_scores(predictions[-1].cpu().numpy(), labels[-1].cpu().numpy())
+        score = compute_cir_scores(all_preds[-1], all_labels[-1])
         logs = {
             'loss': loss.item() * args.accumulation_steps,
             'steps': len(pbar) * epoch + i,
@@ -174,29 +174,15 @@ def train_step(
             logs = {f'train_{k}': v for k, v in logs.items()}
             wandb_run.log(logs)
     
-    predictions = torch.cat(predictions).to(rank)
-    labels = torch.cat(labels).to(rank)
+    all_preds = torch.cat(all_preds).to(rank)
+    all_labels = torch.cat(all_labels).to(rank)
 
-    gathered_predictions = [torch.empty_like(predictions) for _ in range(world_size)]
-    gathered_labels = [torch.empty_like(labels) for _ in range(world_size)]
-    dist.all_gather(gathered_predictions, predictions)
-    dist.all_gather(gathered_labels, labels)
-    dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
-    total_loss /= (len(dataloader) * world_size)
+    gathered_loss, gathered_preds, gathered_labels = gather_results(all_loss, all_preds, all_labels)
+    output = {'loss': gathered_loss.item(), **compute_cp_scores(gathered_preds, gathered_labels)} if rank == 0 else {}
+    output = {f'train_{key}': value for key, value in output.items()}
+    logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End {output}')
 
-    if rank == 0:
-        all_predictions = torch.cat(gathered_predictions).cpu().numpy()
-        all_labels = torch.cat(gathered_labels).cpu().numpy()
-        all_score = compute_cp_scores(all_predictions, all_labels)
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End (Score: {all_score}, Avg Loss: {total_loss.item()})')
-    else:
-        all_score = {}
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End')
-
-    return {
-        'train_loss': total_loss.item(), 
-        **{f'train_{key}': value for key, value in all_score.items()}
-    }
+    return output
 
 
         
@@ -210,8 +196,7 @@ def valid_step(
     model.eval()
     pbar = tqdm(dataloader, desc=f'Valid Epoch {epoch+1}/{args.n_epochs}')
     
-    predictions, labels = [], []
-    total_loss = torch.zeros(1, device=rank)
+    all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
@@ -237,18 +222,18 @@ def valid_step(
         dists = torch.stack([
             torch.sum(
                 torch.norm(q_emb.detach()[None, None, :] - c_embs.detach()[None, :, :], dim=2), dim=0
-            )
-            for q_emb, c_embs in zip(batched_q_emb, batched_c_embs)
+            ) for q_emb, c_embs in zip(batched_q_emb, batched_c_embs)
         ])  # Shape: (batch_sz, num_candidates)
+        preds = torch.argmin(dists, dim=1)  # Shape: (batch_sz,)
+        labels = torch.zeros(args.batch_sz_per_gpu, dtype=torch.long, device=rank)
 
-        predictions_ = torch.argmin(dists, dim=1)  # Shape: (batch_sz,)
-        predictions.append(predictions_)  # Append as torch.Tensor
-        labels.append(torch.zeros(args.batch_sz_per_gpu, dtype=torch.long, device=rank))  # Directly on GPU
-        
-        total_loss += loss.item() * args.accumulation_steps  # Accumulate scaled loss
+        # Accumulate Results
+        all_loss += loss.item() * args.accumulation_steps / len(dataloader)
+        all_preds.append(preds.detach())
+        all_labels.append(labels.detach())
 
         # Logging
-        score = compute_cir_scores(predictions[-1].cpu().numpy(), labels[-1].cpu().numpy())
+        score = compute_cir_scores(all_preds[-1], all_labels[-1])
         logs = {
             'loss': loss.item() * args.accumulation_steps,
             'steps': len(pbar) * epoch + i,
@@ -259,29 +244,15 @@ def valid_step(
             logs = {f'valid_{k}': v for k, v in logs.items()}
             wandb_run.log(logs)
     
-    predictions = torch.cat(predictions).to(rank)
-    labels = torch.cat(labels).to(rank)
+    all_preds = torch.cat(all_preds).to(rank)
+    all_labels = torch.cat(all_labels).to(rank)
 
-    gathered_predictions = [torch.empty_like(predictions) for _ in range(world_size)]
-    gathered_labels = [torch.empty_like(labels) for _ in range(world_size)]
-    dist.all_gather(gathered_predictions, predictions)
-    dist.all_gather(gathered_labels, labels)
-    dist.all_reduce(total_loss, op=dist.ReduceOp.SUM)
-    total_loss /= (len(dataloader) * world_size)
+    gathered_loss, gathered_preds, gathered_labels = gather_results(all_loss, all_preds, all_labels)
+    output = {'loss': gathered_loss.item(), **compute_cp_scores(gathered_preds, gathered_labels)} if rank == 0 else {}
+    output = {f'valid_{key}': value for key, value in output.items()}
+    logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End {output}')
 
-    if rank == 0:
-        all_predictions = torch.cat(gathered_predictions).cpu().numpy()
-        all_labels = torch.cat(gathered_labels).cpu().numpy()
-        all_score = compute_cp_scores(all_predictions, all_labels)
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End (Score: {all_score}, Avg Loss: {total_loss.item()})')
-    else:
-        all_score = {}
-        logger.info(f'Epoch {epoch+1}/{args.n_epochs} --> End')
-
-    return {
-        'valid_loss': total_loss.item(), 
-        **{f'valid_{key}': value for key, value in all_score.items()}
-    }
+    return output
 
     
 def train(
@@ -370,9 +341,6 @@ if __name__ == '__main__':
         wandb_run = wandb.init(project='outfit-transformer', config=args.__dict__)
     else:
         wandb_run = None
-        
-    metadata = polyvore.load_metadata(args.polyvore_dir)
-    all_embeddings_dict = polyvore.load_all_embeddings_dict(args.polyvore_dir, metadata)
     
     mp.spawn(
         train, args=(args.world_size, args, wandb_run), 

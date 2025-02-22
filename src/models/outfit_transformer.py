@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Any, Union, Literal, Optional
 from torch import Tensor
 from PIL import Image
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -45,7 +46,7 @@ class OutfitTransformerConfig:
 
 
 class OutfitTransformer(nn.Module):
-    query_img = Image.open(QUERY_IMG_PATH)
+    query_img = cv2.resize(cv2.cvtColor(cv2.imread(str(QUERY_IMG_PATH)), cv2.COLOR_BGR2RGB), (224, 224))
     
     def __init__(
         self, 
@@ -108,7 +109,7 @@ class OutfitTransformer(nn.Module):
             nn.Linear(self.enc.d_out, self.cfg.d_embed, bias=False)
         )
     
-    def _pad_and_mask(self, outfits) -> Tuple[List, List, Tensor]:
+    def _pad_and_mask(self, outfits: List[List[FashionItem]]) -> Tuple[List, List, Tensor]:
         if self.cfg.padding == 'max_length':
             max_length = self.cfg.max_length
         else:
@@ -214,11 +215,11 @@ class OutfitTransformer(nn.Module):
         query: List[FashionComplementaryQuery], 
         use_precomputed_embedding: bool=False,
         *args, **kwargs
-    ) -> List[Tensor]:
+    ) -> Tensor:
         """
         Embeds query items for compatibility.
         """
-        query_items = [FashionItem(category=i.category, image=self.query_img, description=i.category) for i in query]
+        query_items = [[FashionItem(category=i.category, image=self.query_img, description=i.category)] for i in query]
         outfits = [query_.outfit for query_ in query]
         
         if use_precomputed_embedding:
@@ -232,7 +233,7 @@ class OutfitTransformer(nn.Module):
             enc_outs = torch.cat([query_enc_outs, enc_outs], dim=1)
             mask = torch.cat([query_mask, mask], dim=1)
         else:
-            outfits = [[query_item] + outfit for query_item, outfit in zip(query_items, outfits)]
+            outfits = [query_item + outfit for query_item, outfit in zip(query_items, outfits)]
             images, texts, mask = self._pad_and_mask(outfits)
             enc_outs = self.enc(images, texts)
         
@@ -242,14 +243,14 @@ class OutfitTransformer(nn.Module):
         if self.cfg.transformer_norm_out:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
             
-        return [embedding for embedding in embeddings]
+        return embeddings # [B, D]
 
     def embed_complementary_item(
         self, 
         item: List[FashionItem], 
         use_precomputed_embedding: bool=False,
         *args, **kwargs
-    ) -> List[Tensor]:
+    ) -> Tensor:
         """
         Embeds candidate items for compatibility.
         """
@@ -264,9 +265,9 @@ class OutfitTransformer(nn.Module):
             enc_outs = self.enc(images, texts)
         
         last_hidden_states = self.transformer_enc(enc_outs, src_key_padding_mask=mask)
-        embeddings = self.embed_ffn(last_hidden_states[:, 0, :])
+        embeddings = self.embed_ffn(last_hidden_states[:, 0, :]) # [B, D]
         
         if self.cfg.transformer_norm_out:
             embeddings = F.normalize(embeddings, p=2, dim=-1)
             
-        return [embedding[0] for embedding in embeddings]
+        return embeddings # [B, D]
