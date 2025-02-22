@@ -12,16 +12,8 @@ import pathlib
 from ..data.datatypes import (
     FashionCompatibilityQuery, FashionComplementaryQuery, FashionItem
 )
-from .modules.encoder import OutfitTransformerEncoder
+from .modules.encoder import ItemEncoder
 from ..utils.model_utils import get_device
-
-# Constants
-# Image.fromarray(np.zeros((224, 224, 3), dtype=np.uint8))
-PAD_IMAGE = np.array(Image.new("RGB", (224, 224)))
-PAD_TEXT = ''
-
-QUERY_IMG_PATH = pathlib.Path(__file__).parent.absolute() / 'question.jpg'
-
 
 @dataclass
 class OutfitTransformerConfig:
@@ -29,16 +21,18 @@ class OutfitTransformerConfig:
     max_length: int = 16
     truncation: bool = True
     
-    init_enc: bool = True
-    enc_text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
-    enc_dim_per_modality: int = 128
-    enc_norm_out: bool = True
+    query_img_path = pathlib.Path(__file__).parent.absolute() / 'question.jpg'
+    
+    init_item_enc: bool = True
+    item_enc_text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
+    item_enc_dim_per_modality: int = 128
+    item_enc_norm_out: bool = True
     aggregation_method: Literal['concat', 'sum', 'mean'] = 'concat'
     
     init_transformer: bool = True
     transformer_n_head: int = 16
     transformer_d_ffn: int = 2024
-    transformer_n_layers: int = 6
+    transformer_n_layers: int = 4 # Smaller than the original paper's (6)
     transformer_dropout: float = 0.3
     transformer_norm_out: bool = False
     
@@ -46,112 +40,118 @@ class OutfitTransformerConfig:
 
 
 class OutfitTransformer(nn.Module):
-    query_img = cv2.resize(cv2.cvtColor(cv2.imread(str(QUERY_IMG_PATH)), cv2.COLOR_BGR2RGB), (224, 224))
     
     def __init__(
         self, 
-        cfg: OutfitTransformerConfig = OutfitTransformerConfig()
+        cfg: Optional[OutfitTransformerConfig] = None
     ):
         super().__init__()
-        self.cfg = cfg
-        # Outfit Encoder
-        if self.cfg.init_enc:
-            print("Building Backbone Encoder...")
-            self._build_enc()
-        # Transformer Encoder
-        if self.cfg.init_transformer:
-            print("Building Transformer Encoder...")
-            self._build_transformer_enc()
-            # Classifier and Embedding Layers
-            self._build_calc_cp_ffn()
-            self._build_embed_ffn()
-            self.classifier_embedding = nn.parameter.Parameter(
-                torch.randn(1, self.enc.d_out, requires_grad=True)
-            )
+        self.cfg = cfg if cfg is not None else OutfitTransformerConfig()
         
-    def _build_enc(self) -> OutfitTransformerEncoder:
+        # Initialize the item encoder
+        self._build_item_enc()
+        image_size = (self.item_enc.image_size, self.item_enc.image_size)
+        self.image_query = cv2.resize(
+            src=cv2.cvtColor(cv2.imread(str(cfg.query_img_path)), 
+                            cv2.COLOR_BGR2RGB), 
+            dsize=image_size
+        )
+        self.image_pad = np.array(
+            Image.new("RGB", image_size)
+        )
+        self.text_pad = ''
+            
+        # Initialize the style encoder
+        self._build_style_enc()
+        self._build_predict_ffn()
+        self._init_predict_s_emb()
+        self._build_embed_ffn()
+            
+        
+    def _build_item_enc(self) -> ItemEncoder:
         """Builds the outfit encoder using configuration parameters."""
-        self.enc = OutfitTransformerEncoder(
-            text_model_name=self.cfg.enc_text_model_name,
-            enc_dim_per_modality=self.cfg.enc_dim_per_modality,
-            enc_norm_out=self.cfg.enc_norm_out,
+        self.item_enc = ItemEncoder(
+            text_model_name=self.cfg.item_enc_text_model_name,
+            enc_dim_per_modality=self.cfg.item_enc_dim_per_modality,
+            enc_norm_out=self.cfg.item_enc_norm_out,
             aggregation_method=self.cfg.aggregation_method
         )
     
-    def _build_transformer_enc(self) -> nn.TransformerEncoder:
+    def _build_style_enc(self) -> nn.TransformerEncoder:
         """Builds the transformer encoder using configuration parameters."""
-        transformer_enc_layer = nn.TransformerEncoderLayer(
-            d_model=self.enc.d_out,
+        style_enc_layer = nn.TransformerEncoderLayer(
+            d_model=self.item_enc.d_embed,
             nhead=self.cfg.transformer_n_head,
             dim_feedforward=self.cfg.transformer_d_ffn,
             dropout=self.cfg.transformer_dropout,
             batch_first=True,
             norm_first=True,
-            activation=F.mish,
+            activation=F.gelu,
         )
-        self.transformer_enc = nn.TransformerEncoder(
-            encoder_layer=transformer_enc_layer, 
+        self.style_enc = nn.TransformerEncoder(
+            encoder_layer=style_enc_layer, 
             num_layers=self.cfg.transformer_n_layers
         )
     
-    def _build_calc_cp_ffn(self) -> nn.Sequential:
+    def _build_predict_ffn(self) -> nn.Sequential:
         """Builds the feed-forward classifier layer."""
-        self.calc_cp_ffn = nn.Sequential(
-            nn.Dropout(self.cfg.transformer_dropout),
-            nn.Linear(self.enc.d_out, 1, bias=False),
+        self.predict_ffn = nn.Sequential(
+            nn.LayerNorm(self.item_enc.d_embed),
+            nn.Linear(self.item_enc.d_embed, 1),
             nn.Sigmoid()
         )
         
     def _build_embed_ffn(self) -> nn.Sequential:
         """Builds the feed-forward embedding layer."""
         self.embed_ffn = nn.Sequential(
-            nn.Dropout(self.cfg.transformer_dropout),
-            nn.Linear(self.enc.d_out, self.cfg.d_embed, bias=False)
+            nn.Linear(self.item_enc.d_embed, self.cfg.d_embed, bias=False)
+        )
+        
+    def _init_predict_s_emb(self):
+        """Initializes the classifier embedding."""
+        self.predict_s_emb = nn.Parameter(
+            torch.randn(1, self.item_enc.d_embed) * 0.02
         )
     
-    def _pad_and_mask(self, outfits: List[List[FashionItem]]) -> Tuple[List, List, Tensor]:
+    def _get_max_length(self, sequences):
+        """Determine max length based on configuration."""
         if self.cfg.padding == 'max_length':
-            max_length = self.cfg.max_length
-        else:
-            max_length = max(len(o) for o in outfits)
-            if self.cfg.truncation:
-                max_length = min(self.cfg.max_length, max_length)
+            return self.cfg.max_length
+        max_length = max(len(seq) for seq in sequences)
+        return min(self.cfg.max_length, max_length) if self.cfg.truncation else max_length
+
+    def _pad_sequences(self, sequences, pad_value, max_length):
+        """Pad sequences to the specified max length."""
+        return [seq[:max_length] + [pad_value] * (max_length - len(seq)) for seq in sequences]
+
+    def _pad_and_mask_outfits(
+        self, outfits: List[List[FashionItem]]
+    ) -> Tuple[List[List[np.ndarray]], List[List[str]], torch.Tensor]:
+        max_length = self._get_max_length(outfits)
         
-        images, texts, mask = [], [], []
-        for outfit in outfits:
-            outfit = outfit[:max_length]
-            images.append(
-                [item.image for item in outfit] + [PAD_IMAGE] * (max_length - len(outfit))
-            )
-            texts.append(
-                [f"A {item.category} featuring {item.description}" for item in outfit] + [PAD_TEXT] * (max_length - len(outfit))
-            )
-            mask.append(
-                [0] * len(outfit) + [1] * (max_length - len(outfit))
-            )
-            
+        images = self._pad_sequences([[item.image for item in outfit] for outfit in outfits], self.image_pad, max_length)
+        texts = self._pad_sequences([
+            [f"A {item.category} featuring {item.description}" for item in outfit] for outfit in outfits
+        ], self.text_pad, max_length)
+        mask = [[0] * len(seq) + [1] * (max_length - len(seq)) for seq in outfits]
+        
         return images, texts, torch.BoolTensor(mask).to(self.device)
-    
-    def _pad_and_mask_for_embedding(self, es_of_outfits):
-        if self.cfg.padding == 'max_length':
-            max_length = self.cfg.max_length
-        else:
-            max_length = max(len(es) for es in es_of_outfits)
-            if self.cfg.truncation:
-                max_length = min(self.cfg.max_length, max_length)
 
-        batch_size = len(es_of_outfits)
-
-        # Initialize tensors with correct dtype and device
-        embeddings = torch.zeros((batch_size, max_length, self.enc.d_out), dtype=torch.float, device=self.device)
+    def _pad_and_mask_for_embs(
+        self, embs_of_outfits: List[List[np.ndarray]]
+    ) -> Tuple[Tensor, Tensor]:
+        max_length = self._get_max_length(embs_of_outfits)
+        batch_size = len(embs_of_outfits)
+        
+        embeddings = torch.zeros((batch_size, max_length, self.item_enc.d_embed), dtype=torch.float, device=self.device)
         mask = torch.ones((batch_size, max_length), dtype=torch.bool, device=self.device)
-
-        for i, es_of_outfit in enumerate(es_of_outfits):
-            es_of_outfit = np.array(es_of_outfit[:max_length])
-            length = len(es_of_outfit)
-            embeddings[i, :length] = torch.tensor(es_of_outfit, dtype=torch.float, device=self.device)
+        
+        for i, embs_of_outfit in enumerate(embs_of_outfits):
+            embs_of_outfit = np.array(embs_of_outfit[:max_length])
+            length = len(embs_of_outfit)
+            embeddings[i, :length] = torch.tensor(embs_of_outfit, dtype=torch.float, device=self.device)
             mask[i, :length] = False
-
+        
         return embeddings, mask
     
     @property
@@ -169,7 +169,7 @@ class OutfitTransformer(nn.Module):
         *args, **kwargs
     ) -> Tensor:
         if isinstance(inputs[0], FashionCompatibilityQuery):
-            return self.calculate_compatibility_score(inputs, *args, **kwargs)
+            return self.predict_score(inputs, *args, **kwargs)
         
         elif isinstance(inputs[0], FashionComplementaryQuery):
             return self.embed_complementary_query(inputs, *args, **kwargs)
@@ -179,34 +179,31 @@ class OutfitTransformer(nn.Module):
         else:
             raise ValueError("Invalid input type.")
     
-    def calculate_compatibility_score(
+    def predict_score(
         self, 
         query: List[FashionCompatibilityQuery],
         use_precomputed_embedding: bool = False,
         *args, **kwargs
     ) -> Tensor:
-        """
-        Predicts the compatibility scores for the given queries.
-        """
         outfits = [query_.outfit for query_ in query]
         
         if use_precomputed_embedding:
             assert all([item_.embedding is not None for item_ in sum(outfits, [])])
-            es_of_outfits = [[item_.embedding for item_ in outfit] for outfit in outfits]
-            enc_outs, mask = self._pad_and_mask_for_embedding(es_of_outfits)
+            embs_of_outfits = [[item_.embedding for item_ in outfit] for outfit in outfits]
+            enc_outs, mask = self._pad_and_mask_for_embs(embs_of_outfits)
         else:
             outfits = [query_.outfit for query_ in query]
-            images, texts, mask = self._pad_and_mask(outfits)
-            enc_outs = self.enc(images, texts)
+            images, texts, mask = self._pad_and_mask_outfits(outfits)
+            enc_outs = self.item_enc(images, texts)
 
-        enc_outs = torch.cat(
-            [self.classifier_embedding.unsqueeze(0).expand(len(query), -1, -1), enc_outs], dim=1
-        )
-        mask = torch.cat(
-            [torch.zeros(len(query), 1, dtype=torch.bool, device=self.device), mask], dim=1
-        )
-        last_hidden_states = self.transformer_enc(enc_outs, src_key_padding_mask=mask)
-        scores = self.calc_cp_ffn(last_hidden_states[:, 0, :])
+        predict_s_emb = torch.nn.functional.normalize(self.predict_s_emb, p=2, dim=-1)
+        predict_s_emb = predict_s_emb.unsqueeze(0).expand(len(query), -1, -1)
+        enc_outs = torch.cat([predict_s_emb, enc_outs], dim=1)
+
+        mask = torch.cat([torch.zeros(len(query), 1, dtype=torch.bool, device=self.device), mask], dim=1)
+
+        last_hidden_states = self.style_enc(enc_outs, src_key_padding_mask=mask)
+        scores = self.predict_ffn(last_hidden_states[:, 0, :])
 
         return scores
     
@@ -219,25 +216,26 @@ class OutfitTransformer(nn.Module):
         """
         Embeds query items for compatibility.
         """
-        query_items = [[FashionItem(category=i.category, image=self.query_img, description=i.category)] for i in query]
+        q_items = [[FashionItem(category=i.category, image=self.image_query, description=i.category)] for i in query]
         outfits = [query_.outfit for query_ in query]
         
         if use_precomputed_embedding:
-            query_images, query_texts, query_mask = self._pad_and_mask(query_items)
-            query_enc_outs = self.enc(query_images, query_texts)
-            
             assert all([item_.embedding is not None for item_ in sum(outfits, [])])
-            es_of_outfits = [[item_.embedding for item_ in outfit] for outfit in outfits]
-            enc_outs, mask = self._pad_and_mask_for_embedding(es_of_outfits)
             
-            enc_outs = torch.cat([query_enc_outs, enc_outs], dim=1)
-            mask = torch.cat([query_mask, mask], dim=1)
+            q_images, q_texts, q_mask = self._pad_and_mask_outfits(q_items)
+            q_enc_outs = self.item_enc(q_images, q_texts)
+            
+            embs_of_outfits = [[item_.embedding for item_ in outfit] for outfit in outfits]
+            enc_outs, mask = self._pad_and_mask_for_embs(embs_of_outfits)
+            
+            enc_outs = torch.cat([q_enc_outs, enc_outs], dim=1)
+            mask = torch.cat([q_mask, mask], dim=1)
         else:
-            outfits = [query_item + outfit for query_item, outfit in zip(query_items, outfits)]
-            images, texts, mask = self._pad_and_mask(outfits)
-            enc_outs = self.enc(images, texts)
+            outfits = [q_item + outfit for q_item, outfit in zip(q_items, outfits)]
+            images, texts, mask = self._pad_and_mask_outfits(outfits)
+            enc_outs = self.item_enc(images, texts)
         
-        last_hidden_states = self.transformer_enc(enc_outs, src_key_padding_mask=mask)
+        last_hidden_states = self.style_enc(enc_outs, src_key_padding_mask=mask)
         embeddings = self.embed_ffn(last_hidden_states[:, 0, :])
         
         if self.cfg.transformer_norm_out:
@@ -256,15 +254,15 @@ class OutfitTransformer(nn.Module):
         """
         if use_precomputed_embedding:
             assert all([item_.embedding is not None for item_ in item])
-            es_of_outfits = [[item_.embedding] for item_ in item]
-            enc_outs, mask = self._pad_and_mask_for_embedding(es_of_outfits)
+            embs_of_outfits = [[item_.embedding] for item_ in item]
+            enc_outs, mask = self._pad_and_mask_for_embs(embs_of_outfits)
         else:
             assert item
             outfits = [[item_] for item_ in item]
-            images, texts, mask = self._pad_and_mask(outfits)
-            enc_outs = self.enc(images, texts)
+            images, texts, mask = self._pad_and_mask_outfits(outfits)
+            enc_outs = self.item_enc(images, texts)
         
-        last_hidden_states = self.transformer_enc(enc_outs, src_key_padding_mask=mask)
+        last_hidden_states = self.style_enc(enc_outs, src_key_padding_mask=mask)
         embeddings = self.embed_ffn(last_hidden_states[:, 0, :]) # [B, D]
         
         if self.cfg.transformer_norm_out:

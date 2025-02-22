@@ -86,6 +86,7 @@ def setup_dataloaders(rank, world_size, args):
 
     return item_dataloader
 
+
 def compute(rank: int, world_size: int, args: Any):  
     # Setup
     setup(rank, world_size)
@@ -135,4 +136,3 @@ if __name__ == '__main__':
         compute, args=(args.world_size, args), 
         nprocs=args.world_size, join=True
     )
-        

@@ -16,7 +16,7 @@ from .text_encoder import HuggingFaceTextEncoder, CLIPTextEncoder
 from ...utils.model_utils import aggregate_embeddings
 
 
-class OutfitTransformerEncoder(nn.Module):
+class ItemEncoder(nn.Module):
     def __init__(
         self, 
         model_name,
@@ -40,12 +40,17 @@ class OutfitTransformerEncoder(nn.Module):
         )
         
     @property
-    def d_out(self):
+    def d_embed(self):
         if self.aggregation_method == 'concat':
             d_model = self.enc_dim_per_modality * 2 
         else:
             d_model = self.enc_dim_per_modality
+            
         return d_model
+    
+    @property
+    def image_size(self):
+        return self.image_enc.image_size
 
     def forward(self, images, texts, *args, **kwargs):
         # Encode images and texts
@@ -68,7 +73,7 @@ class OutfitTransformerEncoder(nn.Module):
         return encoder_outputs
     
     
-class OutfitCLIPTransformerEncoder(OutfitTransformerEncoder):
+class CLIPItemEncoder(ItemEncoder):
     def __init__(
         self, 
         model_name,

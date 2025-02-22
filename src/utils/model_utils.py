@@ -1,6 +1,8 @@
 from typing import Optional
 from torch import Tensor
 import torch
+from ..data.datatypes import FashionItem
+from typing import List, Tuple
 
 
 def get_device(model: torch.nn.Module) -> torch.device:

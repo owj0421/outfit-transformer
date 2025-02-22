@@ -22,42 +22,24 @@ from typing import Dict, Any, Optional
 
 from ...utils.model_utils import freeze_model, mean_pooling
     
-    
 class BaseTextEncoder(nn.Module, ABC):
     def __init__(self):
-        """
-        Base class for embedding text sequences into a fixed-size representation.
-
-        Args:
-            embedding_size (int): Dimensionality of the output embedding.
-        """
         super().__init__()
 
     @property
     def device(self) -> torch.device:
-        """
-        Returns the device on which the model's parameters are stored.
-
-        Returns:
-            torch.device: The device of the model parameters.
-        """
         return next(self.parameters()).device
+    
+    @property
+    @abstractmethod
+    def d_embed(self) -> int:
+        raise NotImplementedError('The d_embed property must be implemented by subclasses.')
 
     @abstractmethod
     def _forward(
         self, 
         texts: List[List[str]]
     ) -> torch.Tensor:
-        """
-        Abstract method for embedding a list of text sequences into a tensor.
-
-        Args:
-            texts (List[List[str]]): A batch of text sequences, each represented 
-                as a list of strings.
-
-        Returns:
-            torch.Tensor: A tensor of shape (batch_size, longest_sequence_length, embedding_size).
-        """
         raise NotImplementedError('The embed method must be implemented by subclasses.')
 
     def forward(
@@ -66,17 +48,6 @@ class BaseTextEncoder(nn.Module, ABC):
         normalize: bool = True,
         *args, **kwargs
     ) -> torch.Tensor:
-        """
-        Forward pass that calls the embed method.
-
-        Args:
-            texts (List[List[str]]): A batch of text sequences, each represented 
-                as a list of strings.
-            *args, **kwargs: Additional arguments to be passed to the embed method.
-
-        Returns:
-            torch.Tensor: Output of the embed method.
-        """
         if len(set(len(text_seq) for text_seq in texts)) > 1:
             raise ValueError('All sequences in texts should have the same length.')
         
@@ -92,7 +63,7 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
     
     def __init__(
         self,
-        embedding_size: int = 64,
+        d_embed: int = 64,
         model_name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2",
         freeze: bool = True
     ):
@@ -101,36 +72,30 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         for dimensionality reduction.
 
         Args:
-            embedding_size (int): Dimensionality of the output embedding.
+            d_embed (int): Dimensionality of the output embedding.
             model_name_or_path (str): Pre-trained transformer model identifier or path.
             tokenizer_args (Dict[str, Any], optional): Arguments for the tokenizer.
                 Defaults to a configuration with max length, padding, and truncation.
         """
         super().__init__()
-        self.embedding_size=embedding_size
         self.model = AutoModel.from_pretrained(model_name_or_path)
         if freeze:
             freeze_model(self.model)
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.proj = nn.Linear(
             in_features=self.model.config.hidden_size, 
-            out_features=embedding_size
+            out_features=d_embed
         )
+        
+    @property
+    def d_embed(self) -> int:
+        return self.proj.out_features
         
     def _forward(
         self, 
         texts: List[List[str]],
         tokenizer_kargs: Dict[str, Any] = None
     ) -> Tensor:
-        """
-        Embeds a batch of text sequences into a tensor using a transformer model.
-
-        Args:
-            texts (List[List[str]]): Batch of text sequences, each represented as a list of strings.
-
-        Returns:
-            torch.Tensor: A tensor of shape (batch_size, longest_sequence_length, embedding_size).
-        """
         batch_size = len(texts)
         texts = sum(texts, [])
 
@@ -156,7 +121,7 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
             outputs
         )
         text_embeddings = text_embeddings.view(
-            batch_size, -1, self.embedding_size
+            batch_size, -1, self.d_embed
         )
 
         return text_embeddings
@@ -175,10 +140,13 @@ class CLIPTextEncoder(BaseTextEncoder):
         )
         if freeze:
             freeze_model(self.model)
-        self.embedding_size = self.model.config.projection_dim
         self.tokenizer = CLIPTokenizer.from_pretrained(
            model_name_or_path
         )
+        
+    @property
+    def d_embed(self) -> int:
+        return self.model.config.projection_dim
         
     def _forward(
         self, 
@@ -205,7 +173,7 @@ class CLIPTextEncoder(BaseTextEncoder):
             **inputs
         ).text_embeds
         text_embeddings = text_embeddings.view(
-            batch_size, -1, self.embedding_size
+            batch_size, -1, self.d_embed
         )
             
         return text_embeddings

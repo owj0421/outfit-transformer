@@ -24,26 +24,25 @@ from typing import Dict, Any, Optional
 from ...utils.model_utils import freeze_model, mean_pooling
 
 import numpy as np
+
 class BaseImageEncoder(nn.Module, ABC):
     
     def __init__(self):
-        """
-        Base class for embedding images into a fixed-size representation.
-
-        Args:
-            embedding_size (int): Dimensionality of the output embedding.
-        """
         super().__init__()
         
     @property
     def device(self) -> torch.device:
-        """
-        Returns the device on which the model's parameters are stored.
-
-        Returns:
-            torch.device: The device of the model parameters.
-        """
         return next(self.parameters()).device
+    
+    @property
+    @abstractmethod
+    def image_size(self) -> int:
+        raise NotImplementedError('The image_size property must be implemented by subclasses.')
+    
+    @property
+    @abstractmethod
+    def d_embed(self) -> int:
+        raise NotImplementedError('The d_embed property must be implemented by subclasses.')
 
     @abstractmethod
     def _forward(
@@ -58,17 +57,6 @@ class BaseImageEncoder(nn.Module, ABC):
         normalize: bool = True,
         *args, **kwargs
     ) -> torch.Tensor:
-        """
-        Forward pass that calls the embed method.
-
-        Args:
-            images (List[List[np.ndarray]]): A batch of images, each represented 
-                as a list of PIL Images.
-            *args, **kwargs: Additional arguments to be passed to the embed method.
-
-        Returns:
-            torch.Tensor: Output of the embed method.
-        """
         if len(set(len(image_seq) for image_seq in images)) > 1:
             raise ValueError('All sequences in images should have the same length.')
         
@@ -83,40 +71,39 @@ class BaseImageEncoder(nn.Module, ABC):
 class Resnet18ImageEncoder(BaseImageEncoder):
     
     def __init__(
-        self, 
-        embedding_size: int = 64,
-        size: int = 224,
-        crop_size: int = 224,
-        freeze: bool = False
+        self, d_embed: int = 64,
+        size: int = 224, crop_size: int = 224, freeze: bool = False
     ):
-        """
-        Image Encoder based on a pre-trained ResNet-18 model with a custom embedding layer.
-
-        Args:
-            embedding_size (int): Dimensionality of the output embedding.
-            image_size (int): Size to which each image is resized before center cropping.
-            crop_size (int): Size of the center crop applied after resizing.
-        """
         super().__init__()
 
-        # Load pre-trained ResNet-18 and adjust the final layer to match embedding_size
-        self.embedding_size = embedding_size
+        # Load pre-trained ResNet-18 and adjust the final layer to match d_embed
+        self.d_embed = d_embed
+        self.size = size
+        self.crop_size = crop_size
+        self.freeze = freeze
+        
         self.model = resnet18(weights=ResNet18_Weights.DEFAULT)
         self.model.fc = nn.Linear(
             in_features=self.model.fc.in_features, 
-            out_features=embedding_size
+            out_features=d_embed
         )
         if freeze:
             freeze_model(self.model)
-            
-        self.size = size
-        self.crop_size = crop_size
+        
         self.transform = transforms.Compose([
             transforms.Resize(self.size, interpolation=transforms.InterpolationMode.BICUBIC),
             transforms.CenterCrop(self.crop_size),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
+        
+    @property
+    def image_size(self) -> int:
+        return self.crop_size
+    
+    @property
+    def d_embed(self) -> int:
+        return self.d_embed
     
     def _forward(
         self, 
@@ -129,7 +116,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
             images (List[List[Image.Image]]): Batch of images, each represented as a list of PIL Images.
 
         Returns:
-            torch.Tensor: Tensor of shape (batch_size, longest_sequence_length, embedding_size).
+            torch.Tensor: Tensor of shape (batch_size, longest_sequence_length, d_embed).
         """
         batch_size = len(images)
         images = sum(images, [])
@@ -141,7 +128,7 @@ class Resnet18ImageEncoder(BaseImageEncoder):
             transformed_images
         )
         image_embeddings = image_embeddings.view(
-            batch_size, -1, self.embedding_size
+            batch_size, -1, self.d_embed
         )
         
         return image_embeddings
@@ -155,17 +142,22 @@ class CLIPImageEncoder(BaseImageEncoder):
         freeze: bool = True
     ):
         super().__init__()
-        # self.embedding_size = 512
         self.model = CLIPVisionModelWithProjection.from_pretrained(
             model_name_or_path
         )
         if freeze:
             freeze_model(self.model)
-        self.embedding_size = self.model.config.projection_dim
         self.processor = CLIPImageProcessor.from_pretrained(
             model_name_or_path
         )
+        
+    @property
+    def image_size(self) -> int:
+        return self.processor.size['shortest_edge']
     
+    @property
+    def d_embed(self) -> int:
+        return self.model.config.projection_dim
     
     def _forward(
        self, 
@@ -185,7 +177,7 @@ class CLIPImageEncoder(BaseImageEncoder):
             **transformed_images
         ).image_embeds
         image_embeddings = image_embeddings.view(
-            batch_size, -1, self.embedding_size
+            batch_size, -1, self.d_embed
         )
 
         return image_embeddings
