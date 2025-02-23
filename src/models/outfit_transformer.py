@@ -32,7 +32,7 @@ class OutfitTransformerConfig:
     init_transformer: bool = True
     transformer_n_head: int = 16
     transformer_d_ffn: int = 2024
-    transformer_n_layers: int = 4 # Smaller than the original paper's (6)
+    transformer_n_layers: int = 6
     transformer_dropout: float = 0.3
     transformer_norm_out: bool = False
     
@@ -88,16 +88,22 @@ class OutfitTransformer(nn.Module):
             norm_first=True,
             activation=F.gelu,
         )
+        style_enc_norm = nn.LayerNorm(
+            self.item_enc.d_embed
+        )
         self.style_enc = nn.TransformerEncoder(
             encoder_layer=style_enc_layer, 
-            num_layers=self.cfg.transformer_n_layers
+            num_layers=self.cfg.transformer_n_layers,
+            norm=style_enc_norm,
+            enable_nested_tensor=False
         )
     
     def _build_predict_ffn(self) -> nn.Sequential:
         """Builds the feed-forward classifier layer."""
         self.predict_ffn = nn.Sequential(
             nn.LayerNorm(self.item_enc.d_embed),
-            nn.Linear(self.item_enc.d_embed, 1),
+            nn.Dropout(self.cfg.transformer_dropout),
+            nn.Linear(self.item_enc.d_embed, 1, bias=False),
             nn.Sigmoid()
         )
         
@@ -110,7 +116,8 @@ class OutfitTransformer(nn.Module):
     def _init_predict_s_emb(self):
         """Initializes the classifier embedding."""
         self.predict_s_emb = nn.Parameter(
-            torch.randn(1, self.item_enc.d_embed) * 0.02
+            torch.randn(1, self.item_enc.d_embed) * 0.02, 
+            requires_grad=True
         )
     
     def _get_max_length(self, sequences):
@@ -129,10 +136,14 @@ class OutfitTransformer(nn.Module):
     ) -> Tuple[List[List[np.ndarray]], List[List[str]], torch.Tensor]:
         max_length = self._get_max_length(outfits)
         
-        images = self._pad_sequences([[item.image for item in outfit] for outfit in outfits], self.image_pad, max_length)
-        texts = self._pad_sequences([
-            [f"A {item.category} featuring {item.description}" for item in outfit] for outfit in outfits
-        ], self.text_pad, max_length)
+        images = self._pad_sequences(
+            [[item.image for item in outfit] for outfit in outfits], 
+            self.image_pad, max_length
+        )
+        texts = self._pad_sequences(
+            [[f"A photo of a {item.description}".lower() for item in outfit] for outfit in outfits], 
+            self.text_pad, max_length
+        )
         mask = [[0] * len(seq) + [1] * (max_length - len(seq)) for seq in outfits]
         
         return images, texts, torch.BoolTensor(mask).to(self.device)
@@ -143,13 +154,16 @@ class OutfitTransformer(nn.Module):
         max_length = self._get_max_length(embs_of_outfits)
         batch_size = len(embs_of_outfits)
         
-        embeddings = torch.zeros((batch_size, max_length, self.item_enc.d_embed), dtype=torch.float, device=self.device)
-        mask = torch.ones((batch_size, max_length), dtype=torch.bool, device=self.device)
+        embeddings = torch.zeros((batch_size, max_length, self.item_enc.d_embed), 
+                                 dtype=torch.float, device=self.device)
+        mask = torch.ones((batch_size, max_length), 
+                          dtype=torch.bool, device=self.device)
         
         for i, embs_of_outfit in enumerate(embs_of_outfits):
             embs_of_outfit = np.array(embs_of_outfit[:max_length])
             length = len(embs_of_outfit)
-            embeddings[i, :length] = torch.tensor(embs_of_outfit, dtype=torch.float, device=self.device)
+            embeddings[i, :length] = torch.tensor(embs_of_outfit, 
+                                                  dtype=torch.float, device=self.device)
             mask[i, :length] = False
         
         return embeddings, mask
@@ -257,7 +271,6 @@ class OutfitTransformer(nn.Module):
             embs_of_outfits = [[item_.embedding] for item_ in item]
             enc_outs, mask = self._pad_and_mask_for_embs(embs_of_outfits)
         else:
-            assert item
             outfits = [[item_] for item_ in item]
             images, texts, mask = self._pad_and_mask_outfits(outfits)
             enc_outs = self.item_enc(images, texts)

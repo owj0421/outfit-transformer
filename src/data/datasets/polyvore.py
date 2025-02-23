@@ -83,7 +83,7 @@ def load_image(dataset_dir, item_id, size=(224, 224)):
     try:
         image = cv2.imread(image_path)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)  # Lanczos 대신 Bilinear
+        # image = cv2.resize(image, size, interpolation=cv2.INTER_LINEAR)  # Lanczos 대신 Bilinear
         return image
     except Exception as e:
         print(f"Error loading image {image_path}: {e}")

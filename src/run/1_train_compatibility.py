@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--lr', type=float,
                         default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
-                        default=1)
+                        default=4)
     parser.add_argument('--wandb_key', type=str, 
                         default=None)
     parser.add_argument('--seed', type=int, 
@@ -131,8 +131,8 @@ def train_step(
         if (i + 1) % args.accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
-        if scheduler:
             scheduler.step()
+            
         
         # Accumulate Results
         all_loss += loss.item() * args.accumulation_steps / len(dataloader)
@@ -243,7 +243,7 @@ def train(
     optimizer = torch.optim.AdamW(ddp_model.parameters(), lr=args.lr)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
         optimizer,
-        max_lr=args.lr, epochs=args.n_epochs, steps_per_epoch=len(train_dataloader),
+        max_lr=args.lr, epochs=args.n_epochs, steps_per_epoch=int(len(train_dataloader) / args.accumulation_steps),
         pct_start=0.3, anneal_strategy='cos', div_factor=25, final_div_factor=1e4
     )
     loss_fn = focal_loss
@@ -283,7 +283,7 @@ def train(
             
         dist.barrier()
         map_location = f'cuda:{rank}' if torch.cuda.is_available() else 'cpu'
-        state_dict = torch.load(checkpoint_path, map_location=map_location)
+        state_dict = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
         ddp_model.load_state_dict(state_dict['model'])
         logger.info(f'Checkpoint loaded from {checkpoint_path}')
 

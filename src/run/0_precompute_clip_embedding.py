@@ -25,13 +25,11 @@ import torch.multiprocessing as mp
 import pickle
 
 from ..models.load import load_model
-from ..utils.loss import focal_loss
 from ..utils.utils import seed_everything
 from ..utils.logger import get_logger
 from ..utils.distributed import setup, cleanup
 from ..data.datasets import polyvore
 from ..data import collate_fn
-from ..evaluation.metrics import compute_cp_scores
 
 
 SRC_DIR = pathlib.Path(__file__).parent.parent.parent.absolute()
