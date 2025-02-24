@@ -66,21 +66,23 @@ def validation(args):
     model.eval()
     
     pbar = tqdm(test_dataloader, desc=f'[Test] Compatibility')
-    predictions, labels = [], []
+    all_preds, all_labels = [], []
     with torch.no_grad():
         for i, data in enumerate(pbar):
             if args.demo and i > 2:
                 break
-            labels_ = torch.tensor(data['label'], dtype=torch.float32, device='cuda')
-            predictions_ = model(data['query'], use_precomputed_embedding=True).squeeze(1)
+            labels = torch.tensor(data['label'], dtype=torch.float32, device='cuda')
+            preds = model(data['query'], use_precomputed_embedding=True).squeeze(1)
             
-            predictions.append(predictions_.detach().cpu().numpy())
-            labels.append(labels_.detach().cpu().numpy())
+            all_preds.append(preds.detach())
+            all_labels.append(labels.detach())
         
-            score = compute_cp_scores(predictions[-1], labels[-1])
+            score = compute_cp_scores(all_preds[-1], all_labels[-1])
             pbar.set_postfix(**score)
-    
-    score = compute_cp_scores(np.concatenate(predictions), np.concatenate(labels))
+            
+    all_preds = torch.cat(all_preds)
+    all_labels = torch.cat(all_labels)
+    score = compute_cp_scores(all_preds, all_labels)
     print(
         f"[Test] Compatibility --> {score}"
     )

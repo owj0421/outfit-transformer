@@ -109,15 +109,6 @@ class Resnet18ImageEncoder(BaseImageEncoder):
         self, 
         images: List[List[np.ndarray]]
     ):  
-        """
-        Embeds a batch of images into a tensor using ResNet-18.
-
-        Args:
-            images (List[List[Image.Image]]): Batch of images, each represented as a list of PIL Images.
-
-        Returns:
-            torch.Tensor: Tensor of shape (batch_size, longest_sequence_length, d_embed).
-        """
         batch_size = len(images)
         images = sum(images, [])
         
@@ -143,7 +134,7 @@ class CLIPImageEncoder(BaseImageEncoder):
     ):
         super().__init__()
         self.model = CLIPVisionModelWithProjection.from_pretrained(
-            model_name_or_path
+            model_name_or_path, weights_only=False
         )
         if freeze:
             freeze_model(self.model)
@@ -173,9 +164,11 @@ class CLIPImageEncoder(BaseImageEncoder):
         transformed_images = self.processor(
             images=images, **processor_kargs
         ).to(self.device)
+        
         image_embeddings = self.model(
             **transformed_images
         ).image_embeds
+        
         image_embeddings = image_embeddings.view(
             batch_size, -1, self.d_embed
         )

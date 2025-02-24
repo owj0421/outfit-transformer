@@ -22,12 +22,12 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
 def focal_loss(
-        y_prob: torch.Tensor,
-        y_true: torch.Tensor,
-        alpha: float = 0.75,
-        gamma: float = 2,
-        reduction: str = "mean",
-        ) -> torch.Tensor:
+    y_prob: torch.Tensor,
+    y_true: torch.Tensor,
+    alpha: float = 0.5,
+    gamma: float = 2,
+    reduction: str = "mean",
+) -> torch.Tensor:
     ce_loss = F.binary_cross_entropy_with_logits(y_prob, y_true, reduction="none")
     p_t = y_prob * y_true + (1 - y_prob) * (1 - y_true)
     loss = ce_loss * ((1 - p_t) ** gamma)

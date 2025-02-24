@@ -20,7 +20,7 @@ class OutfitCLIPTransformer(OutfitTransformer):
     ):
         super().__init__(cfg)
 
-    def _build_item_enc(self) -> CLIPItemEncoder:
+    def _init_item_enc(self) -> CLIPItemEncoder:
         """Builds the outfit encoder using configuration parameters."""
         self.item_enc = CLIPItemEncoder(
             model_name=self.cfg.item_enc_clip_model_name,

@@ -57,11 +57,11 @@ def parse_args():
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
-                        default=128)
+                        default=150)
     parser.add_argument('--lr', type=float,
-                        default=2e-5)
+                        default=1e-5)
     parser.add_argument('--accumulation_steps', type=int,
-                        default=4)
+                        default=2)
     parser.add_argument('--wandb_key', type=str, 
                         default=None)
     parser.add_argument('--seed', type=int, 
@@ -133,7 +133,6 @@ def train_step(
             optimizer.zero_grad()
             scheduler.step()
             
-        
         # Accumulate Results
         all_loss += loss.item() * args.accumulation_steps / len(dataloader)
         all_preds.append(preds.detach())

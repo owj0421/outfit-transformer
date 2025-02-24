@@ -67,16 +67,6 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
         model_name_or_path: str = "sentence-transformers/all-MiniLM-L6-v2",
         freeze: bool = True
     ):
-        """
-        Text Encoder using a Hugging Face transformer model, with a projection layer
-        for dimensionality reduction.
-
-        Args:
-            d_embed (int): Dimensionality of the output embedding.
-            model_name_or_path (str): Pre-trained transformer model identifier or path.
-            tokenizer_args (Dict[str, Any], optional): Arguments for the tokenizer.
-                Defaults to a configuration with max length, padding, and truncation.
-        """
         super().__init__()
         self.model = AutoModel.from_pretrained(model_name_or_path)
         if freeze:
@@ -136,7 +126,7 @@ class CLIPTextEncoder(BaseTextEncoder):
     ):
         super().__init__()
         self.model = CLIPTextModelWithProjection.from_pretrained(
-            model_name_or_path
+            model_name_or_path, weights_only=False
         )
         if freeze:
             freeze_model(self.model)
@@ -166,12 +156,15 @@ class CLIPTextEncoder(BaseTextEncoder):
         inputs = self.tokenizer(
             text=texts, **tokenizer_kargs
         )
+        
         inputs = {
             key: value.to(self.device) for key, value in inputs.items()
         }
+        
         text_embeddings = self.model(
             **inputs
         ).text_embeds
+        
         text_embeddings = text_embeddings.view(
             batch_size, -1, self.d_embed
         )

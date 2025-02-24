@@ -12,7 +12,7 @@ from .outfit_clip_transformer import (
 
 def load_model(model_type, checkpoint, **cfg_kwargs):
     if checkpoint:
-        state_dict = torch.load(checkpoint)
+        state_dict = torch.load(checkpoint, weights_only=False)
         
     if model_type == 'original':
         cfg = OutfitTransformerConfig(**state_dict['config']) if checkpoint else OutfitTransformerConfig(**cfg_kwargs)
@@ -24,12 +24,12 @@ def load_model(model_type, checkpoint, **cfg_kwargs):
         
     if checkpoint:
         new_state_dict = {}
-        for key, value in state_dict.items():
+        for key, value in state_dict['model'].items():
             new_key = key.replace("module.", "")  # "module." 부분 제거
             new_state_dict[new_key] = value
         
         model.load_state_dict(
-            state_dict['model'], strict=False
+            new_state_dict, strict=True
         )
         print(
             f"Loaded model from checkpoint: {checkpoint}"

@@ -13,7 +13,8 @@ import os
 from ...data import datatypes
 from .image_encoder import Resnet18ImageEncoder, CLIPImageEncoder
 from .text_encoder import HuggingFaceTextEncoder, CLIPTextEncoder
-from ...utils.model_utils import aggregate_embeddings
+from ...utils.model_utils import freeze_model, mean_pooling, aggregate_embeddings
+from transformers import AutoModel, AutoTokenizer, AutoProcessor
 
 
 class ItemEncoder(nn.Module):
@@ -52,7 +53,7 @@ class ItemEncoder(nn.Module):
     def image_size(self):
         return self.image_enc.image_size
 
-    def forward(self, images, texts, *args, **kwargs):
+    def forward(self, images, texts, *args, **kwargs):        
         # Encode images and texts
         image_embeddings = self.image_enc(
             images, normalize=self.enc_norm_out, *args, **kwargs
@@ -66,12 +67,9 @@ class ItemEncoder(nn.Module):
             text_embeddings=text_embeddings,
             aggregation_method=self.aggregation_method
         )
-        # Normalize output
-        # if self.enc_norm_out:
-        #     encoder_outputs = F.normalize(encoder_outputs, p=2, dim=-1)
         
         return encoder_outputs
-    
+
     
 class CLIPItemEncoder(ItemEncoder):
     def __init__(
