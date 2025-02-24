@@ -61,7 +61,7 @@ def parse_args():
     parser.add_argument('--lr', type=float,
                         default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
-                        default=2)
+                        default=4)
     parser.add_argument('--wandb_key', type=str, 
                         default=None)
     parser.add_argument('--seed', type=int, 

@@ -32,7 +32,7 @@ class OutfitTransformerConfig:
     init_transformer: bool = True
     transformer_n_head: int = 16 # Original: 16
     transformer_d_ffn: int = 2024 # Original: Unknown
-    transformer_n_layers: int = 6 # Original: 6
+    transformer_n_layers: int = 4 # Original: 6
     transformer_dropout: float = 0.3 # Original: Unknown
     transformer_norm_out: bool = False
     
@@ -89,14 +89,8 @@ class OutfitTransformer(nn.Module):
     
     def _init_variables(self):
         image_size = (self.item_enc.image_size, self.item_enc.image_size)
-        self.image_query = cv2.resize(
-            src=cv2.cvtColor(cv2.imread(str(self.cfg.query_img_path)), 
-                             cv2.COLOR_BGR2RGB), 
-            dsize=image_size
-        )
-        self.image_pad = np.array(
-            Image.new("RGB", image_size)
-        )
+        self.image_query = Image.open(self.cfg.query_img_path).resize(image_size)
+        self.image_pad = Image.new("RGB", image_size)
         self.text_pad = ''
     
     def _get_max_length(self, sequences):

@@ -140,7 +140,7 @@ class CLIPImageEncoder(BaseImageEncoder):
         if freeze:
             freeze_model(self.model)
         self.processor = CLIPImageProcessor.from_pretrained(
-            model_name_or_path, do_convert_rgb=False
+            model_name_or_path, # do_convert_rgb=False
         )
         
     @property

@@ -5,12 +5,6 @@ from pydantic import BaseModel, Field
 import numpy as np
 
 
-def default_image() -> np.ndarray:
-    """Returns a default blank image."""
-    # return Image.new("RGB", (224, 224))
-    return np.zeros((224, 224, 3), dtype=np.uint8)
-
-
 class FashionItem(BaseModel):
     item_id: Optional[int] = Field(
         default=None,
@@ -20,8 +14,8 @@ class FashionItem(BaseModel):
         default="",
         description="Category of the item"
     )
-    image: Optional[np.ndarray] = Field(
-        default_factory=default_image,
+    image: Optional[Image.Image] = Field(
+        default=None,
         description="Image of the item"
     )
     description: Optional[str] = Field(
