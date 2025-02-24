@@ -24,7 +24,7 @@ import torch.optim as optim
 import torch.multiprocessing as mp
 
 from ..models.load import load_model
-from ..utils.loss import focal_loss
+from ..utils.loss import FocalLoss
 from ..utils.utils import seed_everything
 from ..utils.logger import get_logger
 from ..utils.distributed import setup, cleanup, gather_results
@@ -57,9 +57,9 @@ def parse_args():
     parser.add_argument('--n_workers_per_gpu', type=int,
                         default=4)
     parser.add_argument('--n_epochs', type=int,
-                        default=150)
+                        default=128)
     parser.add_argument('--lr', type=float,
-                        default=1e-5)
+                        default=2e-5)
     parser.add_argument('--accumulation_steps', type=int,
                         default=2)
     parser.add_argument('--wandb_key', type=str, 
@@ -115,19 +115,20 @@ def train_step(
     model, optimizer, scheduler, loss_fn, dataloader
 ):
     model.train()  
-    pbar = tqdm(dataloader, desc=f'Train Epoch {epoch+1}/{args.n_epochs}')
+    pbar = tqdm(dataloader, desc=f'Train Epoch {epoch+1}/{args.n_epochs}', disable=(rank != 0))
     
     all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
         queries = data['query']
-        labels = torch.tensor(data['label'], dtype=torch.float32, device=rank)
+        labels = torch.tensor(data['label'], dtype=torch.float32).to(rank)
         
         preds = model(queries, use_precomputed_embedding=True).squeeze(1)
         
         loss = loss_fn(y_true=labels, y_prob=preds) / args.accumulation_steps
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         if (i + 1) % args.accumulation_steps == 0:
             optimizer.step()
             optimizer.zero_grad()
@@ -169,14 +170,14 @@ def valid_step(
     model, loss_fn, dataloader
 ):
     model.eval()
-    pbar = tqdm(dataloader, desc=f'Valid Epoch {epoch+1}/{args.n_epochs}')
+    pbar = tqdm(dataloader, desc=f'Valid Epoch {epoch+1}/{args.n_epochs}', disable=(rank != 0))
     
     all_loss, all_preds, all_labels = torch.zeros(1, device=rank), [], []
     for i, data in enumerate(pbar):
         if args.demo and i > 2:
             break
         queries = data['query']
-        labels = torch.tensor(data['label'], dtype=torch.float32, device=rank)
+        labels = torch.tensor(data['label'], dtype=torch.float32).to(rank)
     
         preds = model(queries, use_precomputed_embedding=True).squeeze(1)
         
@@ -245,7 +246,7 @@ def train(
         max_lr=args.lr, epochs=args.n_epochs, steps_per_epoch=int(len(train_dataloader) / args.accumulation_steps),
         pct_start=0.3, anneal_strategy='cos', div_factor=25, final_div_factor=1e4
     )
-    loss_fn = focal_loss
+    loss_fn = FocalLoss() # focal_loss(alpha=0.5, gamma=2)
     logger.info(f'Optimizer and Scheduler Setup Completed')
 
     # Training Loop

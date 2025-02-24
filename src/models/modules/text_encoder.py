@@ -80,7 +80,8 @@ class HuggingFaceTextEncoder(BaseTextEncoder):
     @property
     def d_embed(self) -> int:
         return self.proj.out_features
-        
+    
+    @torch.no_grad()
     def _forward(
         self, 
         texts: List[List[str]],
@@ -128,6 +129,7 @@ class CLIPTextEncoder(BaseTextEncoder):
         self.model = CLIPTextModelWithProjection.from_pretrained(
             model_name_or_path, weights_only=False
         )
+        self.model.eval()
         if freeze:
             freeze_model(self.model)
         self.tokenizer = CLIPTokenizer.from_pretrained(
@@ -137,7 +139,8 @@ class CLIPTextEncoder(BaseTextEncoder):
     @property
     def d_embed(self) -> int:
         return self.model.config.projection_dim
-        
+    
+    @torch.no_grad()
     def _forward(
         self, 
         texts: List[List[str]],
@@ -170,3 +173,8 @@ class CLIPTextEncoder(BaseTextEncoder):
         )
             
         return text_embeddings
+    
+    def train(self, mode=True):
+        # Ensure self.model is in eval mode even if train is called
+        super().train(mode)  # Call parent class train method
+        self.model.eval()  # Force the model to remain in eval mode

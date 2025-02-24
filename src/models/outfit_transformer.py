@@ -68,27 +68,23 @@ class OutfitTransformer(nn.Module):
             norm_first=True,
             activation=F.mish,
         )
-        style_enc_norm = nn.LayerNorm(
-            self.item_enc.d_embed
-        )
         self.style_enc = nn.TransformerEncoder(
             encoder_layer=style_enc_layer,
             num_layers=self.cfg.transformer_n_layers,
-            norm=style_enc_norm,
             enable_nested_tensor=False
         )
         self.predict_ffn = nn.Sequential(
             nn.LayerNorm(self.item_enc.d_embed),
             nn.Dropout(self.cfg.transformer_dropout),
-            nn.Linear(self.item_enc.d_embed, 1, bias=False),
+            nn.Linear(self.item_enc.d_embed, 1),
             nn.Sigmoid()
-        )
-        self.embed_ffn = nn.Sequential(
-            nn.Linear(self.item_enc.d_embed, self.cfg.d_embed, bias=False)
         )
         self.predict_s_emb = nn.Parameter(
             torch.randn(1, self.item_enc.d_embed) * 0.02, 
             requires_grad=True
+        )
+        self.embed_ffn = nn.Sequential(
+            nn.Linear(self.item_enc.d_embed, self.cfg.d_embed, bias=False)
         )
     
     def _init_variables(self):

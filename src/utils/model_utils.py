@@ -3,6 +3,8 @@ from torch import Tensor
 import torch
 from ..data.datatypes import FashionItem
 from typing import List, Tuple
+from torch import nn
+import torch.nn.functional as F
 
 
 def get_device(model: torch.nn.Module) -> torch.device:
