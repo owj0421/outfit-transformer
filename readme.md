@@ -1,4 +1,4 @@
-# ⚠️ The code is currently being completely modified. Checkpoints, codes, and demos will be uploaded within a week.
+⚠️ The code is currently being completely modified. Checkpoints, codes, and demos will be uploaded within a week. (2025. 2. 24. Mon)
 
 # Outfit Transformer: Outfit Representations for Fashion Recommendation
 
@@ -8,9 +8,17 @@ This repository contains the implementation of the Outfit Transformer, inspired 
 
 > Rohan Sarkar et al. [Outfit Transformer: Outfit Representations for Fashion Recommendation](https://arxiv.org/abs/2204.04812). CVPR 2023.
 
-Our implementation not only faithfully reproduces the method presented in the paper but also introduces several enhancements to improve performance. These improvements elevate the model to a state-of-the-art (SoTA) level, achieving superior results in fashion recommendation tasks.
+Our implementation not only faithfully reproduces the method presented in the paper but also introduces several enhancements to improve performance.
+
+**Key Improvements**
+
+- Higher performance compared to the original paper by replacing the backbone
+- Faster retraining by precomputing item features
 
 <div align="center"> <img src = https://github.com/owj0421/outfit-transformer/assets/98876272/fc39d1c7-b076-495d-8213-3b98ef038b64 width = 512> </div>
+
+
+
 
 ## Performance
 
@@ -29,13 +37,15 @@ Our implementation not only faithfully reproduces the method presented in the pa
 
 ## Settings
 
-### Environment Setting
+**Environment Setting**
+
 ```
 conda create -n outfit-transformer python=3.12.4
 conda activate outfit-transformer
 conda env update -f environment.yml
 ```
-### Download Dataset
+**Download Dataset**
+
 ```
 mkdir datasets
 cd datasets
@@ -43,7 +53,8 @@ gdown --id 1ox8GFHG8iMs64iiwITQhJ47dkQ0Q7SBu
 unzip polyvore.zip -d polyvore
 cd ../
 ```
-### Download Checkpoint
+**Download Checkpoint**
+
 Pretrained model checkpoints are also available [here](https://drive.google.com/drive/folders/1cMTvmC6vWV9F9j08GX1MppNm6DDnSiZl?usp=drive_link).
 
 ## Training
