@@ -1,3 +1,5 @@
+# ⚠️ The code is currently being completely modified. Checkpoints, codes, and demos will be uploaded within a week.
+
 # Outfit Transformer: Outfit Representations for Fashion Recommendation
 
 ## Introduction
