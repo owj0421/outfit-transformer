@@ -75,7 +75,7 @@ def load_all_embeddings_dict(dataset_dir):
     return all_embeddings_dict
 
 
-def load_image(dataset_dir, item_id, size=(224, 224)):
+def _load_image(dataset_dir, item_id, size=(224, 224)):
     image_path = POLYVORE_IMAGE_DATA_PATH.format(
         dataset_dir=dataset_dir,
         item_id=item_id
@@ -94,7 +94,7 @@ def load_image(dataset_dir, item_id, size=(224, 224)):
 
 def load_image_wrapper(args):
     dataset_dir, item_id, size = args
-    return item_id, load_image(dataset_dir, item_id, size)
+    return item_id, _load_image(dataset_dir, item_id, size)
     
     
 def load_all_image_dict(dataset_dir, metadata, size=(224, 224)):
@@ -113,26 +113,16 @@ def load_all_image_dict(dataset_dir, metadata, size=(224, 224)):
     return all_image_dict
 
 
-def load_item(dataset_dir, metadata, item_id, all_embeddings_dict=None, all_image_dict=None):
+def load_item(dataset_dir, metadata, item_id, load_image: bool = False):
     metadata_ = metadata[item_id]
-    
-    if all_embeddings_dict:
-        embedding = all_embeddings_dict[item_id]
-    else:
-        embedding = None
-        
-    if all_image_dict:
-        image = all_image_dict[item_id]
-    else:
-        image = load_image(dataset_dir, item_id) if not all_embeddings_dict else None
-    
+
     return FashionItem(
         item_id=metadata_['item_id'],
         category=metadata_['semantic_category'],
-        image=image,
+        image=_load_image(dataset_dir, item_id) if not load_image else None,
         description=metadata_['title'] if metadata_['title'] else metadata_['url_name'],
         metadata=metadata_,
-        embedding=embedding
+        embedding=None
     )
     
     
@@ -175,34 +165,28 @@ class PolyvoreCompatibilityDataset(Dataset):
             'train', 'valid', 'test'
         ] = 'train',
         metadata: dict = None,
-        all_embeddings_dict=None,
-        all_image_dict=None
+        load_image: bool = False,
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
         self.data = load_task_data(
             dataset_dir, dataset_type, 'compatibility', dataset_split
         )
-        self.all_embeddings_dict = all_embeddings_dict
-        self.all_image_dict = all_image_dict
+        self.load_image = load_image
         
     def __len__(self):
         return len(self.data)
     
     def __getitem__(self, idx) -> FashionCompatibilityData:
         label = self.data[idx]['label']
-
         outfit = [
-            load_item(self.dataset_dir, self.metadata, item_id, self.all_embeddings_dict) 
+            load_item(self.dataset_dir, self.metadata, item_id, self.load_image) 
             for item_id in self.data[idx]['question']
         ]
-        query=FashionCompatibilityQuery(
-            outfit=outfit
-        )
         
         return FashionCompatibilityData(
             label=label,
-            query=query
+            query=FashionCompatibilityQuery(outfit=outfit)
         )
         
 class PolyvoreFillInTheBlankDataset(Dataset):
@@ -217,16 +201,14 @@ class PolyvoreFillInTheBlankDataset(Dataset):
             'train', 'valid', 'test'
         ] = 'train',
         metadata: dict = None,
-        all_embeddings_dict=None,
-        all_image_dict=None
+        load_image: bool = False,
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
         self.data = load_task_data(
             dataset_dir, dataset_type, 'fill_in_the_blank', dataset_split
         )
-        self.all_embeddings_dict = all_embeddings_dict
-        self.all_image_dict = all_image_dict
+        self.load_image = load_image
         
     def __len__(self):
         return len(self.data)
@@ -234,21 +216,16 @@ class PolyvoreFillInTheBlankDataset(Dataset):
     def __getitem__(self, idx) -> FashionFillInTheBlankData:
         label = self.data[idx]['label']
         answers = [
-            load_item(self.dataset_dir, self.metadata, item_id, 
-                      self.all_embeddings_dict, self.all_image_dict) 
+            load_item(self.dataset_dir, self.metadata, item_id, self.load_image) 
             for item_id in self.data[idx]['answers']
         ]
-        query = FashionComplementaryQuery(
-            outfit=[
-                load_item(self.dataset_dir, self.metadata, item_id, 
-                          self.all_embeddings_dict, self.all_image_dict) 
-                for item_id in self.data[idx]['question']
-            ],
-            category=answers[label].category
-        )
-
+        outfit = [
+            load_item(self.dataset_dir, self.metadata, item_id, self.load_image)
+            for item_id in self.data[idx]['question']
+        ]
+        
         return FashionFillInTheBlankData(
-            query=query,
+            query=FashionComplementaryQuery(outfit=outfit, category=answers[label].category),
             label=label,
             answers=answers
         )
@@ -266,34 +243,28 @@ class PolyvoreTripletDataset(Dataset):
             'train', 'valid', 'test'
         ] = 'train',
         metadata: dict = None,
-        all_embeddings_dict=None,
-        all_image_dict=None
+        load_image: bool = False,
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
         self.data = load_set_data(
             dataset_dir, dataset_type, dataset_split
         )
-        self.all_embeddings_dict = all_embeddings_dict
-        self.all_image_dict = all_image_dict
+        self.load_image = load_image
         
     def __len__(self):
         return len(self.data)
     
     def __getitem__(self, idx) -> FashionTripletData:
         items = [
-            load_item(self.dataset_dir, self.metadata, item_id, 
-                      self.all_embeddings_dict, self.all_image_dict) 
+            load_item(self.dataset_dir, self.metadata, item_id, self.load_image)
             for item_id in self.data[idx]['item_ids']
         ]
         answer = items[random.randint(0, len(items) - 1)]
         outfit = [item for item in items if item != answer]
-        query = FashionComplementaryQuery(
-            outfit=outfit,
-            category=answer.category
-        )
+        
         return FashionTripletData(
-            query=query,
+            query=FashionComplementaryQuery(outfit=outfit, category=answer.category),
             answer=answer
         )
         
@@ -303,22 +274,17 @@ class PolyvoreItemDataset(Dataset):
     def __init__(
         self,
         dataset_dir: str,
-        metadata: dict = None,
-        all_embeddings_dict=None,
-        all_image_dict=None
+        metadata: dict = None
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
         self.all_item_ids = list(self.metadata.keys())
-        self.all_embeddings_dict = all_embeddings_dict
-        self.all_image_dict = all_image_dict
         
     def __len__(self):
         return len(self.all_item_ids)
     
     def __getitem__(self, idx) -> FashionItem:
-        item = load_item(self.dataset_dir, self.metadata, self.all_item_ids[idx], 
-                         self.all_embeddings_dict, self.all_image_dict)
+        item = load_item(self.dataset_dir, self.metadata, self.all_item_ids[idx])
 
         return item
         

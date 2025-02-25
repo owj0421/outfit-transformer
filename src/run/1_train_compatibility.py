@@ -78,23 +78,24 @@ def parse_args():
 
 
 def setup_dataloaders(rank, world_size, args):
+    global all_embeddings_dict, metadata
     metadata = polyvore.load_metadata(args.polyvore_dir)
     all_embeddings_dict = polyvore.load_all_embeddings_dict(args.polyvore_dir)
     
     train = polyvore.PolyvoreCompatibilityDataset(
         dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, 
-        dataset_split='train', metadata=metadata, all_embeddings_dict=all_embeddings_dict
+        dataset_split='train', metadata=metadata, load_image=False
     )
     valid = polyvore.PolyvoreCompatibilityDataset(
         dataset_dir=args.polyvore_dir, dataset_type=args.polyvore_type, 
-        dataset_split='valid', metadata=metadata, all_embeddings_dict=all_embeddings_dict
+        dataset_split='valid', metadata=metadata, load_image=False
     )
 
     train_sampler = DistributedSampler(
         train, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
     )
     valid_sampler = DistributedSampler(
-        valid, num_replicas=world_size, rank=rank, shuffle=True, drop_last=True
+        valid, num_replicas=world_size, rank=rank, shuffle=False, drop_last=True
     )
 
     train_dataloader = DataLoader(
@@ -122,6 +123,9 @@ def train_step(
         if args.demo and i > 2:
             break
         queries = data['query']
+        for query in queries:
+            for item in query.outfit:
+                item.embedding = all_embeddings_dict[item.item_id]
         labels = torch.tensor(data['label'], dtype=torch.float32).to(rank)
         
         preds = model(queries, use_precomputed_embedding=True).squeeze(1)
@@ -177,6 +181,9 @@ def valid_step(
         if args.demo and i > 2:
             break
         queries = data['query']
+        for query in queries:
+            for item in query.outfit:
+                item.embedding = all_embeddings_dict[item.item_id]
         labels = torch.tensor(data['label'], dtype=torch.float32).to(rank)
     
         preds = model(queries, use_precomputed_embedding=True).squeeze(1)
@@ -258,7 +265,7 @@ def train(
             ddp_model, optimizer, scheduler, loss_fn, train_dataloader
         )
         
-        valid_dataloader.sampler.set_epoch(epoch)
+        # valid_dataloader.sampler.set_epoch(epoch)
         valid_logs = valid_step(
             rank, world_size, 
             args, epoch, logger, wandb_run,
@@ -286,7 +293,7 @@ def train(
         state_dict = torch.load(checkpoint_path, map_location=map_location, weights_only=False)
         ddp_model.load_state_dict(state_dict['model'])
         logger.info(f'Checkpoint loaded from {checkpoint_path}')
-
+        
     cleanup()
 
 

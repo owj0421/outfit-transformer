@@ -36,13 +36,13 @@ class FashionItem(BaseModel):
 
     
 class FashionCompatibilityQuery(BaseModel):
-    outfit: List[FashionItem] = Field(
+    outfit: List[Union[FashionItem, int]] = Field(
         default_factory=list,
         description="List of fashion items"
     )
 
 class FashionComplementaryQuery(BaseModel):
-    outfit: List[FashionItem] = Field(
+    outfit: List[Union[FashionItem, int]] = Field(
         default_factory=list,
         description="List of fashion items"
     )
