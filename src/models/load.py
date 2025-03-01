@@ -11,6 +11,7 @@ from .outfit_clip_transformer import (
 from torch.distributed import get_rank, get_world_size
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+
 def load_model(model_type, checkpoint=None, **cfg_kwargs):
     is_distributed = torch.distributed.is_initialized()
 
@@ -48,10 +49,10 @@ def load_model(model_type, checkpoint=None, **cfg_kwargs):
     if model_state_dict:
         new_state_dict = {}
         for k, v in model_state_dict.items():
-            new_key = k.replace("module.", "") if world_size == 1 else k
+            new_key = k.replace("module.", "")
             new_state_dict[new_key] = v
         
-        missing, unexpected = model.load_state_dict(new_state_dict, strict=False)
+        missing, unexpected = model.load_state_dict(new_state_dict, strict=True)
         if missing:
             print(f"[Warning] Missing keys in state_dict: {missing}")
         if unexpected:

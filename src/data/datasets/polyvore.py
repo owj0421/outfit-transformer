@@ -290,21 +290,29 @@ class PolyvoreItemDataset(Dataset):
         self,
         dataset_dir: str,
         metadata: dict = None,
-        load_image: bool = True
+        embedding_dict: dict = None,
+        load_image: bool = False
     ):
         self.dataset_dir = dataset_dir
         self.metadata = metadata if metadata else load_metadata(dataset_dir)
         self.load_image = load_image
+        self.embedding_dict = embedding_dict
+        
         self.all_item_ids = list(self.metadata.keys())
+        # self.item_id_to_idx = {item_id: idx for idx, item_id in enumerate(self.all_item_ids)}
         
     def __len__(self):
         return len(self.all_item_ids)
     
     def __getitem__(self, idx) -> FashionItem:
         item = load_item(self.dataset_dir, self.metadata, self.all_item_ids[idx], 
-                         load_image=self.load_image, embedding_dict=None)
+                         load_image=self.load_image, embedding_dict=self.embedding_dict)
 
         return item
+    
+    def get_item_by_id(self, item_id):
+        return load_item(self.dataset_dir, self.metadata, item_id, 
+                         load_image=self.load_image, embedding_dict=self.embedding_dict)
         
         
 if __name__ == '__main__':

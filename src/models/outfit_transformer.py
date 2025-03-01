@@ -21,8 +21,6 @@ class OutfitTransformerConfig:
     max_length: int = 16
     truncation: bool = True
     
-    # query_img_path = pathlib.Path(__file__).parent.absolute() / 'question.jpg'
-    
     item_enc_text_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     item_enc_dim_per_modality: int = 128
     item_enc_norm_out: bool = True

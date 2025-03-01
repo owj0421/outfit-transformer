@@ -24,7 +24,7 @@ import wandb
 from ..data import collate_fn
 from ..data.datasets import polyvore
 from ..models.load import load_model
-from ..utils.distributed import cleanup, setup
+from ..utils.distributed_utils import cleanup, setup
 from ..utils.logger import get_logger
 from ..utils.utils import seed_everything
 
@@ -34,10 +34,6 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.makedirs(LOGS_DIR, exist_ok=True)
 
 POLYVORE_PRECOMPUTED_CLIP_EMBEDDING_DIR = "{polyvore_dir}/precomputed_clip_embeddings"
-    
-
-def collate_fn(batch):
-    return [item for item in batch]
 
 
 def parse_args():
@@ -75,7 +71,7 @@ def setup_dataloaders(rank, world_size, args):
     
     item_dataloader = DataLoader(
         dataset=item_dataset, batch_size=args.batch_sz_per_gpu, shuffle=False,
-        num_workers=args.n_workers_per_gpu, collate_fn=collate_fn
+        num_workers=args.n_workers_per_gpu, collate_fn=collate_fn.item_collate_fn
     )
 
     return item_dataloader
@@ -94,7 +90,7 @@ def compute(rank: int, world_size: int, args: Any):
     logger.info(f'Dataloaders Setup Completed')
     
     # Model setting
-    model = load_model(model_type=args.model_type, checkpoint=args.checkpoint).to(rank)
+    model = load_model(model_type=args.model_type, checkpoint=args.checkpoint)
     model.eval()
     logger.info(f'Model Loaded')
     
@@ -104,7 +100,10 @@ def compute(rank: int, world_size: int, args: Any):
             if args.demo and len(all_embeddings) > 10:
                 break
             
-            embeddings = model.precompute_clip_embedding(batch)  # (batch_size, d_embed)
+            if dist.get_world_size() > 1:
+                embeddings = model.module.precompute_clip_embedding(batch)  # (batch_size, d_embed)
+            else:
+                embeddings = model.precompute_clip_embedding(batch)
             
             all_ids.extend([item.item_id for item in batch])
             all_embeddings.append(embeddings)

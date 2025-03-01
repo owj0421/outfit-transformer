@@ -61,7 +61,7 @@ rm checkpoints.zip
 Before proceeding with training, make sure to precompute the CLIP embeddings, as all subsequent steps rely on these precomputed features.
 
 ```bash
-python -m src.run.1_precompute_embedding
+python -m src.run.1_generate_clip_embeddings
 ```
 
 ### Step 2: Compatibility Prediction
@@ -97,52 +97,24 @@ python -m src.run.3_test_complemenatry \
 
 ## Demo
 
-Follow the steps below to run the demo for each task:
+Follow the steps below to run the demo:
 
-<details>
-  <summary><strong>Compatibility Prediction (CP)</strong></summary>
+#### Build Database
+```
+python -m src.demo.1_generate_rec_embeddings \
+--checkpoint $PATH/OF/MODEL/.PT/FILE
+```
 
-1. Run demo
-    ```
-    python -m src.run.5_demo \
-    --task cp \
-    --model_type clip \
-    --checkpoint $PATH/OF/MODEL/.PT/FILE
-    ```
+#### Build Faiss Index.
+```
+python -m src.demo.2_build_index
+```
 
-</details>
-
-<br>
-
-<details>
-  <summary><strong>Complementary Item Retrieval (CIR)</strong></summary>
-
-1. Build Database
-    ```
-    python -m run.3_build_db \
-    --polyvore_dir $PATH/TO/LOAD/POLYVORE \
-    --db_dir $PATH/TO/SAVE/ITEM/METADATA
-    ```
-1. Generate Item Embeddings
-    ```
-    python -m src.run.3_generate_embeddings \
-    --model_type clip \
-    --batch_sz 64 \
-    --checkpoint $PATH/OF/MODEL/.PT/FILE
-    ```
-2. Build Faiss Index.
-    ```
-    python -m src.run.4_build_index
-    ```
-3. Run Demo
-    ```
-    python -m src.run.5_demo \
-    --task cir \
-    --model_type clip \
-    --checkpoint $PATH/OF/MODEL/.PT/FILE
-    ```
-
-</details>
+#### Run Demo
+```
+python -m src.demo.3_run \
+--checkpoint $PATH/OF/MODEL/.PT/FILE
+```
 
 ## ⚠️ Note
 

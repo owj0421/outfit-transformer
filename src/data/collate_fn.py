@@ -1,8 +1,15 @@
+from typing import List
+
 from .datatypes import (
     FashionCompatibilityData,
     FashionFillInTheBlankData,
-    FashionTripletData
+    FashionTripletData,
+    FashionItem
 )
+
+
+def item_collate_fn(batch) -> List[FashionItem]:
+    return [item for item in batch]
 
 
 def cp_collate_fn(batch) -> FashionCompatibilityData:
