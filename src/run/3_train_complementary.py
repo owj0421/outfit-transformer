@@ -91,7 +91,7 @@ def setup_dataloaders(rank, world_size, args):
     if world_size == 1:
         train_dataloader = DataLoader(
             dataset=train, batch_size=args.batch_sz_per_gpu, shuffle=True,
-            num_workers=args.n_workers_per_gpu, collate_fn=collate_fn.cp_collate_fn
+            num_workers=args.n_workers_per_gpu, collate_fn=collate_fn.triplet_collate_fn
         )
         valid_dataloader = DataLoader(
             dataset=valid, batch_size=args.batch_sz_per_gpu, shuffle=False,
